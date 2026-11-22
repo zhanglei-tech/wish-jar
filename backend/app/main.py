@@ -1,9 +1,10 @@
+import hashlib
 import shutil
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from apscheduler.schedulers.background import BackgroundScheduler
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -12,12 +13,27 @@ from .config import Settings
 from .db import create_engine_for, create_session_factory
 from .migrations import run_migrations
 from .routes import router
+from .schemas import VersionOut
+
+
+NO_CACHE_HEADERS = {"Cache-Control": "no-cache"}
 
 
 def _frontend_dist(settings: Settings) -> Path:
     if settings.frontend_dist:
         return Path(settings.frontend_dist)
     return Path(__file__).resolve().parents[2] / "frontend" / "dist"
+
+
+def _dist_file(dist: Path, name: str) -> Path:
+    path = dist / name
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Not found")
+    return path
+
+
+def _build_id(index_file: Path) -> str:
+    return hashlib.sha256(index_file.read_bytes()).hexdigest()[:12]
 
 
 @asynccontextmanager
@@ -83,6 +99,30 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     dist = _frontend_dist(settings)
     index_file = dist / "index.html"
+
+    @app.get("/api/version", response_model=VersionOut, include_in_schema=False)
+    def app_version(response: Response) -> VersionOut:
+        response.headers["Cache-Control"] = "no-store"
+        if not index_file.is_file():
+            raise HTTPException(status_code=404, detail="Not found")
+        return VersionOut(build_id=_build_id(index_file))
+
+    @app.get("/manifest.webmanifest", include_in_schema=False)
+    def pwa_manifest():
+        return FileResponse(
+            _dist_file(dist, "manifest.webmanifest"),
+            media_type="application/manifest+json; charset=utf-8",
+            headers=NO_CACHE_HEADERS,
+        )
+
+    @app.get("/sw.js", include_in_schema=False)
+    def service_worker():
+        return FileResponse(
+            _dist_file(dist, "sw.js"),
+            media_type="text/javascript; charset=utf-8",
+            headers={**NO_CACHE_HEADERS, "Service-Worker-Allowed": "/"},
+        )
+
     if index_file.is_file():
         assets = dist / "assets"
         if assets.is_dir():
@@ -102,8 +142,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             except ValueError:
                 raise HTTPException(status_code=404, detail="Not found")
             if target.is_file():
-                return FileResponse(target)
-            return FileResponse(index_file)
+                headers = NO_CACHE_HEADERS if target.name == "index.html" else None
+                return FileResponse(target, headers=headers)
+            return FileResponse(index_file, headers=NO_CACHE_HEADERS)
 
     return app
 

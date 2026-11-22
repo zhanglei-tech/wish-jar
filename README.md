@@ -4,7 +4,7 @@
 
 - 2 位家长 + 1 位孩子，家庭内使用。
 - 家长代记为主，共用设备上的孩子自助为辅。
-- 移动端优先的响应式 Web，不做 PWA、通知、线上支付或第三方统计。
+- 移动端优先的响应式 Web，可安装为 PWA（仅安装与独立窗口，不做离线缓存、通知、线上支付或第三方统计）。
 - 数据保存在本机 SQLite，照片只存本地，不接外部云存储。
 
 ## 功能（MVP）
@@ -18,6 +18,7 @@
 - 兑换申请 → 家长通过（扣分、减库存）→ 线下兑现。
 - 长期心愿：进度、预计完成天数、锁定储蓄，家长可释放锁定。
 - 家长看板、管理中心、SQLite 手动 / 每日自动备份。
+- 可安装 PWA：Android Edge / Chrome 可添加到桌面并以独立窗口打开；有新版本时提示刷新；不缓存资源，断网不可用。
 
 详细需求见 [docs/PRD.md](docs/PRD.md)，工程约定见 [AGENTS.md](AGENTS.md)。
 
@@ -158,6 +159,14 @@ docker compose -f docker-compose.nas.yml up -d
 - 家庭数据始终只在群晖的 `data/` 目录，不要提交到仓库。
 
 Container Manager 里也可以用「项目」选择这个 compose 文件；如果只支持 `docker-compose.yml`，把 `docker-compose.nas.yml` 改名为 `docker-compose.yml` 即可，目录里仍然不需要源码。
+
+### 安装为 PWA
+
+- 手机 Edge / Chrome 打开 HTTPS 地址（群晖反向代理域名），在浏览器菜单中选择“安装应用”或“添加到主屏幕”。
+- 仅提供安装与独立窗口；不缓存页面、API 或照片，断网时不能使用。
+- 安装与 service worker 需要安全上下文：HTTPS 或 localhost。`http://192.168.x.x:端口` 不能安装。
+- 新版本部署后重新打开或刷新页面即可；`index.html`、`sw.js`、manifest 均使用 `Cache-Control: no-cache`，构建产物带哈希。
+- 已打开的页面会通过 `/api/version` 检查构建版本；发现新版本时提示“刷新页面”，不会自动刷新，避免打断填写。
 
 ### 备份与恢复
 

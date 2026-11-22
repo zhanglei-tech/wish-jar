@@ -8,6 +8,10 @@ export interface SetupStatus {
   family_name: string | null
 }
 
+export interface VersionInfo {
+  build_id: string
+}
+
 export interface MemberPublic {
   id: number
   name: string

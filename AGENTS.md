@@ -20,7 +20,7 @@
 - 部署：群晖 NAS 的 Docker 单容器，以内网访问为主，偶尔通过群晖 DDNS 外网访问。
 - MVP 范围：以 `docs/PRD.md` 第 4.1 节和第 5 节的 P0 功能为准。
 
-**MVP 明确不做**：PWA、通知、孩子许愿、长期心愿的家长配捐、奖励专属任务、里程碑/分段兑现、统计报表、任务模板、徽章、多孩子周榜。不要提前实现 P1/P2。
+**当前不做**：PWA 离线缓存 / 后台同步 / 推送通知，以及站内通知、任务模板、里程碑 / 分段兑现、多孩子周榜等 P2 功能。P1 已实现，不要重复推翻；P2 不提前实现。
 
 ## 2. 技术路线
 
@@ -28,7 +28,7 @@
 - 前端：Vue 3、Vite、TypeScript、Pinia、Vue Router、Naive UI。
 - 部署：多阶段 Dockerfile，前端构建为静态文件由 FastAPI 托管；`docker compose`。
 - 测试：pytest + FastAPI TestClient；前端 `npm run build` 和 TypeScript 检查。
-- 不使用 PWA、Service Worker、线上支付、第三方分析统计。
+- 支持最小 PWA：manifest + 无缓存 Service Worker，仅用于安装到桌面 / 独立窗口；不做离线缓存、后台同步、推送通知。
 
 ### 目录约定
 
@@ -162,7 +162,11 @@ docker compose up --build
 ## 7. 前端规范
 
 - Vue 3 `<script setup lang="ts">` + Composition API；状态用 Pinia；路由用 Vue Router；组件用 Naive UI。
-- 移动端优先，重点适配 Android Chrome；桌面 Chrome/Edge 正常可用；**不做 PWA**。
+- 移动端优先，重点适配 Android Chrome / Edge；桌面 Chrome/Edge 正常可用；支持安装为 PWA（独立窗口，无离线缓存）。
+- PWA 只用于安装：`public/manifest.webmanifest`、192/512/maskable 图标、`public/sw.js`；service worker 不调用 `caches`、不 `respondWith`、不缓存 API / 照片 / HTML。
+- service worker 仅在生产构建注册；`manifest.webmanifest`、`sw.js`、`index.html` 必须 `Cache-Control: no-cache`。
+- 新版本提醒不依赖缓存：后端 `/api/version` 基于 `index.html` 内容生成构建 ID，响应 `Cache-Control: no-store`；前端启动、回到前台和页面可见期间检查，发现变化时弹对话框提示刷新，不自动刷新，同一版本不重复提示。
+- 不引入 Workbox 等服务 worker 框架；不使用线上支付、第三方分析统计。
 - 孩子端：温暖、有仪式感、卡片化、少文字；家长端：清晰、高效、以待办和操作为中心。
 - API 请求统一走 `src/api.ts`，携带 Cookie；401 时回到登录页。
 - 前端路由守卫只做体验层权限；**所有权限必须在后端再次校验**。
@@ -209,9 +213,10 @@ cd backend && pytest -q
 cd frontend && npm run build && npm run typecheck
 ```
 
+- PWA 至少覆盖：manifest / `sw.js` 返回正确 Content-Type 与 `Cache-Control: no-cache`；SPA fallback 的 `index.html` 不缓存；service worker 不含缓存逻辑；`/api/version` 无缓存且构建 ID 随 `index.html` 变化。
 - 迁移至少验证：空库 `upgrade head`；旧版数据库副本升级到 head。
 - 没有运行测试/构建，不得声称“完成”或“可用”；失败要如实报告输出。
-- MVP 完成标准：PRD 第 4.1 节与第 5 节 P0 功能可用；Docker 能启动；首次向导、登录、任务闭环、奖励兑换、锁定储蓄、备份均可工作；README 有运行与部署说明。
+- MVP 完成标准：PRD 第 4.1 节与第 5 节 P0 功能可用；Docker 能启动；首次向导、登录、任务闭环、奖励兑换、锁定储蓄、备份、PWA 安装均可工作；README 有运行与部署说明。
 
 ## 10. Git 与交付
 
@@ -243,6 +248,6 @@ cd frontend && npm run build && npm run typecheck
 
 ## 13. 当前阶段
 
-- 需求版本：v0.6，状态为“已定稿”，见 `docs/PRD.md`。
-- 仓库目前只有文档、`AGENTS.md` 和 `.gitignore`，尚未开始编码。
-- 实施前先完成 PRD、`AGENTS.md`、`.gitignore` 的 git 提交；提交后按 PRD 第 11 节里程碑推进 MVP。
+- 需求版本：v0.18，状态为“已定稿”，见 `docs/PRD.md`。
+- MVP 与 P1 已实现；当前支持最小 PWA 安装能力与更新提示（无离线缓存）。
+- 新增需求先更新 PRD，再改代码；P2 不提前实现。

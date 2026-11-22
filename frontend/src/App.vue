@@ -8,6 +8,7 @@ import {
   zhCN,
 } from 'naive-ui'
 import { useRouter } from 'vue-router'
+import UpdatePrompt from './components/UpdatePrompt.vue'
 import { useAuthStore } from './stores/auth'
 import { themeOverrides } from './theme'
 
@@ -34,6 +35,7 @@ onUnmounted(() => window.removeEventListener('wishjar:unauthorized', handleUnaut
     <n-message-provider>
       <n-dialog-provider>
         <router-view />
+        <UpdatePrompt />
       </n-dialog-provider>
     </n-message-provider>
   </n-config-provider>

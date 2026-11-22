@@ -24,6 +24,7 @@ import type {
   Task,
   TaskPayload,
   Transaction,
+  VersionInfo,
   Wish,
   WishListPayload,
   WishMatch,
@@ -48,6 +49,7 @@ interface RequestOptions {
   method?: string
   json?: unknown
   body?: BodyInit
+  cache?: RequestCache
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -62,6 +64,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     headers,
     body,
     credentials: 'include',
+    cache: options.cache,
   })
   if (!response.ok) {
     let detail = '请求失败，请稍后再试'
@@ -95,6 +98,7 @@ function query(params: Record<string, string | number | boolean | null | undefin
 }
 
 export const api = {
+  version: () => request<VersionInfo>('/version', { cache: 'no-store' }),
   setupStatus: () => request<SetupStatus>('/setup/status'),
   setup: (payload: SetupPayload) =>
     request<AuthMe>('/setup', { method: 'POST', json: payload }),

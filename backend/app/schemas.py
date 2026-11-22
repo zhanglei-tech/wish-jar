@@ -606,3 +606,7 @@ class BackupOut(BaseModel):
 
 class MessageOut(BaseModel):
     message: str
+
+
+class VersionOut(BaseModel):
+    build_id: str
