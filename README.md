@@ -124,20 +124,20 @@ git tag v1.0.0
 git push origin v1.0.0
 ```
 
-构建完成后镜像地址为 `ghcr.io/<GitHub用户名>/wish-jar:1.0.0`，同时会生成 `1.0`、commit sha 和 `latest` 标签。镜像默认私有，首次发布后可在 GitHub 的 Packages 页面确认可见性。
+构建完成后镜像地址为 `ghcr.io/zhanglei-tech/wish-jar:1.0.0`，同时会生成 `1.0`、commit sha 和 `latest` 标签。镜像默认私有，首次发布后可在 GitHub 的 Packages 页面确认可见性。
 
 群晖上不需要源码，只需要一个目录放 `docker-compose.nas.yml`、`.env` 和 `data/`：
 
 1. 在 `.env` 中设置 `SECRET_KEY`，以及本次要运行的镜像：
 
 ```dotenv
-WISH_JAR_IMAGE=ghcr.io/<GitHub用户名>/wish-jar:1.0.0
+WISH_JAR_IMAGE=ghcr.io/zhanglei-tech/wish-jar:1.0.0
 ```
 
 2. 用只读 PAT 登录 GHCR（经典 PAT 勾选 `read:packages`；如果拉取提示 404，再补 `repo` 权限）：
 
 ```bash
-echo "<PAT>" | docker login ghcr.io -u <GitHub用户名> --password-stdin
+echo "<PAT>" | docker login ghcr.io -u zhanglei-tech --password-stdin
 ```
 
 3. 拉取并启动：

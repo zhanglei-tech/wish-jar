@@ -2,7 +2,7 @@
 # 使用前在 .env 中设置 WISH_JAR_IMAGE 和 SECRET_KEY。
 services:
   wish-jar:
-    image: "${WISH_JAR_IMAGE:?请先在 .env 中设置 WISH_JAR_IMAGE，例如 ghcr.io/your-name/wish-jar:1.0.0}"
+    image: "${WISH_JAR_IMAGE:?请先在 .env 中设置 WISH_JAR_IMAGE，例如 ghcr.io/zhanglei-tech/wish-jar:1.0.0}"
     container_name: wish-jar
     restart: unless-stopped
     ports:
