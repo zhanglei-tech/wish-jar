@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { NButton, NSpin } from 'naive-ui'
+import { computed, onMounted, ref, watch } from 'vue'
+import { NSpin } from 'naive-ui'
 import { useRouter } from 'vue-router'
 import { api } from '../api'
 import { useAuthStore } from '../stores/auth'
@@ -45,19 +45,22 @@ function choose(member: MemberPublic) {
 }
 
 function append(digit: string) {
-  if (pin.value.length >= 4) return
+  if (submitting.value || pin.value.length >= 4) return
   pin.value += digit
 }
 
 function backspace() {
+  if (submitting.value) return
   pin.value = pin.value.slice(0, -1)
 }
 
 function clearPin() {
+  if (submitting.value) return
   pin.value = ''
 }
 
 async function submit() {
+  if (submitting.value) return
   if (!selected.value) {
     error.value = '先选择你是谁'
     return
@@ -78,6 +81,10 @@ async function submit() {
     submitting.value = false
   }
 }
+
+watch(pin, (value) => {
+  if (value.length === 4) void submit()
+})
 </script>
 
 <template>
@@ -88,7 +95,7 @@ async function submit() {
         心愿罐
       </div>
       <h1>今天想存点什么？</h1>
-      <p class="muted">选择你的名字，输入 PIN 进入。</p>
+      <p class="muted">选择你的名字，输入 4 位 PIN 自动进入。</p>
 
       <div v-if="loading" style="padding: 30px 0">
         <n-spin size="large" />
@@ -102,6 +109,7 @@ async function submit() {
             type="button"
             class="member-choice"
             :class="{ selected: member.id === selectedId }"
+            :disabled="submitting"
             @click="choose(member)"
           >
             <span class="face">{{ member.avatar }}</span>
@@ -125,27 +133,18 @@ async function submit() {
             :key="digit"
             type="button"
             class="key"
+            :disabled="submitting"
             @click="append(digit)"
           >
             {{ digit }}
           </button>
-          <button type="button" class="key subtle" @click="clearPin">清空</button>
-          <button type="button" class="key" @click="append('0')">0</button>
-          <button type="button" class="key subtle" @click="backspace">⌫</button>
+          <button type="button" class="key subtle" :disabled="submitting" @click="clearPin">清空</button>
+          <button type="button" class="key" :disabled="submitting" @click="append('0')">0</button>
+          <button type="button" class="key subtle" :disabled="submitting" @click="backspace">⌫</button>
         </div>
 
-        <p class="login-error">{{ error }}</p>
-
-        <n-button
-          type="primary"
-          size="large"
-          block
-          :loading="submitting"
-          :disabled="!selected"
-          @click="submit"
-        >
-          进入心愿罐
-        </n-button>
+        <p v-if="submitting" class="login-status" role="status">正在进入…</p>
+        <p v-else class="login-error">{{ error }}</p>
       </template>
     </section>
   </main>

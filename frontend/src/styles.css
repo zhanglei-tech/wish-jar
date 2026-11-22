@@ -1197,15 +1197,38 @@ select.native-input option {
   transform: scale(0.96);
 }
 
+.key:disabled,
+.member-choice:disabled {
+  cursor: default;
+  opacity: 0.62;
+}
+
+.key:disabled:hover {
+  background: var(--surface-strong);
+}
+
+.member-choice:disabled:hover {
+  transform: none;
+  border-color: var(--line);
+}
+
 .key.subtle {
   color: var(--muted);
   font-size: 14px;
 }
 
-.login-error {
+.login-error,
+.login-status {
   min-height: 22px;
-  color: var(--danger);
   font-size: 12px;
+}
+
+.login-error {
+  color: var(--danger);
+}
+
+.login-status {
+  color: var(--muted);
 }
 
 /* ------------------------------------------------------------------------- */
