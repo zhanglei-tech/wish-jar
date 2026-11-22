@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { NSpin } from 'naive-ui'
 import { useRouter } from 'vue-router'
 import { api } from '../api'
+import VersionLabel from '../components/VersionLabel.vue'
 import { useAuthStore } from '../stores/auth'
 import type { MemberPublic } from '../types'
 
@@ -146,6 +147,8 @@ watch(pin, (value) => {
         <p v-if="submitting" class="login-status" role="status">正在进入…</p>
         <p v-else class="login-error">{{ error }}</p>
       </template>
+
+      <VersionLabel class="login-version" />
     </section>
   </main>
 </template>

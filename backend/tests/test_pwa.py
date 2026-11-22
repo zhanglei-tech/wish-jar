@@ -31,6 +31,7 @@ def make_client(tmp_path, include_manifest: bool = True) -> TestClient:
     settings = Settings(
         database_url=f"sqlite:///{tmp_path / 'test.db'}",
         secret_key="test-secret-key",
+        app_version="v9.9.9",
         auto_migrate=False,
         enable_scheduler=False,
         data_dir=str(tmp_path / "data"),
@@ -87,6 +88,7 @@ def test_version_endpoint_is_no_store_and_tracks_index(tmp_path):
 
         assert first.status_code == 200
         assert first.headers["cache-control"] == "no-store"
+        assert first.json()["version"] == "v9.9.9"
         assert len(first.json()["build_id"]) == 12
 
         (tmp_path / "dist" / "index.html").write_text(

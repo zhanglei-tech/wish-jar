@@ -12,6 +12,7 @@ import {
 import { api } from '../api'
 import EmptyState from '../components/EmptyState.vue'
 import ParentNav from '../components/ParentNav.vue'
+import VersionLabel from '../components/VersionLabel.vue'
 import type {
   Goal,
   GoalPayload,
@@ -1218,6 +1219,8 @@ onMounted(load)
         </p>
       </section>
     </template>
+
+    <VersionLabel class="parent-version" />
 
     <n-modal
       v-model:show="memberOpen"

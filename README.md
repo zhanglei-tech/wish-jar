@@ -60,7 +60,9 @@ npm install
 npm run dev
 ```
 
-打开 `http://localhost:5173`。Vite 会把 `/api` 和 `/uploads` 代理到 `http://localhost:8000`。
+打开 `http://localhost:5173`。Vite 会把 `/api` 和 `/uploads` 代理到 `http://127.0.0.1:8000`（固定 IPv4，避免连到本机 Docker 占用 IPv6 8000 的旧容器）。
+
+本地默认显示“版本 开发版”；想显示具体版本，可在启动后端前设置 `APP_VERSION`，例如 `APP_VERSION=v1.1.1 uvicorn app.main:app --reload --port 8000`。
 
 首次打开会进入 `/setup` 向导。生产构建：
 
@@ -154,6 +156,7 @@ docker compose -f docker-compose.nas.yml up -d
 
 - 默认只构建 `linux/amd64`，适合大多数群晖型号。ARM 群晖可在仓库 Settings → Secrets and variables → Actions → Variables 新建 `IMAGE_PLATFORMS=linux/amd64,linux/arm64`，或在手动运行工作流时填写。
 - GHCR 镜像名必须全小写，工作流会自动转换仓库名。
+- 发布工作流会把 tag 作为 `APP_VERSION` 注入镜像；页面显示的版本号来自这里。构建 ID 只用于更新检测，不在页面展示。
 - 首次发布如果提示没有写包权限，检查 Settings → Actions → General → Workflow permissions，允许 `Read and write permissions`。
 - GHCR 私有包会占用免费额度（约 500MB 存储），私有仓库免费版每月约 2,000 分钟 Actions。只保留最近几个版本，旧版本在 GitHub 的 Packages 页面删除。
 - 家庭数据始终只在群晖的 `data/` 目录，不要提交到仓库。
@@ -167,6 +170,7 @@ Container Manager 里也可以用「项目」选择这个 compose 文件；如�
 - 安装与 service worker 需要安全上下文：HTTPS 或 localhost。`http://192.168.x.x:端口` 不能安装。
 - 新版本部署后重新打开或刷新页面即可；`index.html`、`sw.js`、manifest 均使用 `Cache-Control: no-cache`，构建产物带哈希。
 - 已打开的页面会通过 `/api/version` 检查构建版本；发现新版本时提示“刷新页面”，不会自动刷新，避免打断填写。
+- 登录页、孩子“我的”页和家长“管理中心”页会显示镜像版本号（如 `v1.1.1`）；本地构建未传 `APP_VERSION` 时显示“开发版”。构建 ID 只用于更新检测，不在页面展示。
 
 ### 备份与恢复
 

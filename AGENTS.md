@@ -166,6 +166,7 @@ docker compose up --build
 - PWA 只用于安装：`public/manifest.webmanifest`、192/512/maskable 图标、`public/sw.js`；service worker 不调用 `caches`、不 `respondWith`、不缓存 API / 照片 / HTML。
 - service worker 仅在生产构建注册；`manifest.webmanifest`、`sw.js`、`index.html` 必须 `Cache-Control: no-cache`。
 - 新版本提醒不依赖缓存：后端 `/api/version` 基于 `index.html` 内容生成构建 ID，响应 `Cache-Control: no-store`；前端启动、回到前台和页面可见期间检查，发现变化时弹对话框提示刷新，不自动刷新，同一版本不重复提示。
+- 应用版本号由镜像构建参数 `APP_VERSION` 注入，经 `/api/version` 返回；登录页、孩子“我的”页和家长“管理中心”页显示语义版本，构建 ID 只用于更新检测，不在界面展示。
 - 不引入 Workbox 等服务 worker 框架；不使用线上支付、第三方分析统计。
 - 孩子端：温暖、有仪式感、卡片化、少文字；家长端：清晰、高效、以待办和操作为中心。
 - API 请求统一走 `src/api.ts`，携带 Cookie；401 时回到登录页。
@@ -213,7 +214,7 @@ cd backend && pytest -q
 cd frontend && npm run build && npm run typecheck
 ```
 
-- PWA 至少覆盖：manifest / `sw.js` 返回正确 Content-Type 与 `Cache-Control: no-cache`；SPA fallback 的 `index.html` 不缓存；service worker 不含缓存逻辑；`/api/version` 无缓存且构建 ID 随 `index.html` 变化。
+- PWA 至少覆盖：manifest / `sw.js` 返回正确 Content-Type 与 `Cache-Control: no-cache`；SPA fallback 的 `index.html` 不缓存；service worker 不含缓存逻辑；`/api/version` 无缓存且返回应用语义版本，构建 ID 随 `index.html` 变化。
 - 迁移至少验证：空库 `upgrade head`；旧版数据库副本升级到 head。
 - 没有运行测试/构建，不得声称“完成”或“可用”；失败要如实报告输出。
 - MVP 完成标准：PRD 第 4.1 节与第 5 节 P0 功能可用；Docker 能启动；首次向导、登录、任务闭环、奖励兑换、锁定储蓄、备份、PWA 安装均可工作；README 有运行与部署说明。
@@ -248,6 +249,6 @@ cd frontend && npm run build && npm run typecheck
 
 ## 13. 当前阶段
 
-- 需求版本：v0.18，状态为“已定稿”，见 `docs/PRD.md`。
-- MVP 与 P1 已实现；当前支持最小 PWA 安装能力与更新提示（无离线缓存）。
+- 需求版本：v0.19，状态为“已定稿”，见 `docs/PRD.md`。
+- MVP 与 P1 已实现；当前支持最小 PWA 安装能力、更新提示与语义版本号显示（无离线缓存）。
 - 新增需求先更新 PRD，再改代码；P2 不提前实现。

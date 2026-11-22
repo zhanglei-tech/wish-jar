@@ -19,6 +19,9 @@ RUN pip install --no-cache-dir -r backend/requirements.txt
 COPY backend/ ./backend/
 COPY --from=frontend-build /app/frontend/dist ./frontend/dist
 
+ARG APP_VERSION=dev
+LABEL org.opencontainers.image.version="${APP_VERSION}"
+
 WORKDIR /app/backend
 ENV DATABASE_URL=sqlite:////data/wishjar.db \
     DATA_DIR=/data \
@@ -26,7 +29,8 @@ ENV DATABASE_URL=sqlite:////data/wishjar.db \
     BACKUP_DIR=/data/backups \
     FRONTEND_DIST=/app/frontend/dist \
     TIMEZONE=Asia/Shanghai \
-    COOKIE_SECURE=false
+    COOKIE_SECURE=false \
+    APP_VERSION=${APP_VERSION}
 
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \

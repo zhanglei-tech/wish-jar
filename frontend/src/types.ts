@@ -9,6 +9,7 @@ export interface SetupStatus {
 }
 
 export interface VersionInfo {
+  version: string
   build_id: string
 }
 

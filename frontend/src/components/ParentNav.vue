@@ -20,9 +20,12 @@ async function logout() {
     <nav class="parent-nav-links" aria-label="家长端导航">
       <router-link to="/parent">看板</router-link>
       <router-link to="/parent/wishes">心愿</router-link>
-      <router-link to="/parent/manage">管理</router-link>
       <router-link to="/stats">统计</router-link>
-      <button type="button" @click="logout">退出</button>
+      <router-link to="/parent/manage">管理</router-link>
+      <span class="nav-logout-group">
+        <span class="nav-separator" aria-hidden="true"></span>
+        <button type="button" @click="logout">退出</button>
+      </span>
     </nav>
   </header>
 </template>

@@ -668,6 +668,20 @@ button.task-card:hover {
   background: var(--amber-soft);
 }
 
+.parent-nav-links .nav-logout-group {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.parent-nav-links .nav-separator {
+  flex: none;
+  width: 1px;
+  height: 16px;
+  margin: 0 8px;
+  background: var(--line);
+}
+
 .parent-title {
   margin-bottom: 20px;
 }
@@ -1221,6 +1235,24 @@ select.native-input option {
 .login-status {
   min-height: 22px;
   font-size: 12px;
+}
+
+.app-version {
+  display: block;
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.login-version {
+  margin-top: 14px;
+  text-align: center;
+}
+
+.parent-version {
+  margin-top: 24px;
+  text-align: right;
 }
 
 .login-error {

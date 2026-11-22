@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router'
 import { api } from '../api'
 import ChildNav from '../components/ChildNav.vue'
 import EmptyState from '../components/EmptyState.vue'
+import VersionLabel from '../components/VersionLabel.vue'
 import { useAuthStore } from '../stores/auth'
 import type { ChildHome } from '../types'
 
@@ -150,6 +151,7 @@ async function logout() {
           <span class="pill amber">锁定 {{ home.locked }}</span>
           <span class="pill">等级 {{ home.level }}</span>
         </div>
+        <VersionLabel />
       </section>
 
       <section class="detail-card">

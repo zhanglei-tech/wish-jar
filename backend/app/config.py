@@ -5,6 +5,7 @@ class Settings(BaseSettings):
     """Runtime configuration, loaded from environment variables or .env."""
 
     app_name: str = "心愿罐"
+    app_version: str = "dev"
     database_url: str = "sqlite:///./data/wishjar.db"
     secret_key: str = "dev-only-change-me-in-production"
     cookie_name: str = "wishjar_session"

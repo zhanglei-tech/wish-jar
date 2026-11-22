@@ -609,4 +609,5 @@ class MessageOut(BaseModel):
 
 
 class VersionOut(BaseModel):
+    version: str
     build_id: str

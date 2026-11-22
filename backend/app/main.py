@@ -105,7 +105,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         response.headers["Cache-Control"] = "no-store"
         if not index_file.is_file():
             raise HTTPException(status_code=404, detail="Not found")
-        return VersionOut(build_id=_build_id(index_file))
+        return VersionOut(
+            version=settings.app_version,
+            build_id=_build_id(index_file),
+        )
 
     @app.get("/manifest.webmanifest", include_in_schema=False)
     def pwa_manifest():
