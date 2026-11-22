@@ -34,6 +34,15 @@ const greetingText = computed(() => {
   return name ? `${greeting()}，${name}` : greeting()
 })
 
+const levelPercent = computed(() => {
+  const current = home.value
+  if (!current) return 0
+  if (current.next_level_points <= 0) return 100
+  const span = current.level_progress + current.next_level_points
+  if (span <= 0) return 0
+  return Math.round((current.level_progress * 100) / span)
+})
+
 async function load() {
   loading.value = true
   error.value = ''
@@ -109,12 +118,14 @@ async function submit(note: string, photo: File | null) {
       <WishJar
         :points="home.balance"
         :level="home.level"
-        :progress="home.level_progress"
+        :progress="levelPercent"
       />
       <div class="hero-copy">
         <div class="level-row">
           <span class="level-badge">Lv.{{ home.level }}</span>
-          <span class="muted">再攒 {{ 100 - home.level_progress }} 分升级</span>
+          <span class="muted">
+            {{ home.next_level_points > 0 ? `再攒 ${home.next_level_points} 分升级` : '已经是最高等级' }}
+          </span>
         </div>
         <h2>把今天的小努力，<br />存进心愿罐里。</h2>
         <div class="mini-stats">
@@ -164,6 +175,14 @@ async function submit(note: string, photo: File | null) {
               <span class="points">+{{ task.points }} 积分</span>
               <span class="pill">{{ taskTypeLabel(task.task_type) }}</span>
               <span v-if="task.goal_title" class="pill teal">{{ task.goal_title }}</span>
+              <span v-if="task.reward_title" class="pill amber">专属 {{ task.reward_title }}</span>
+              <span v-if="task.bonus_active" class="pill teal">连续奖励生效</span>
+              <span
+                v-else-if="task.task_type === 'daily' && task.streak_bonus_percent > 0"
+                class="pill"
+              >
+                连续 {{ task.streak_threshold_days }} 天 +{{ task.streak_bonus_percent }}%
+              </span>
             </div>
           </div>
           <span class="task-action">{{ statusText(task) }}</span>
@@ -180,7 +199,8 @@ async function submit(note: string, photo: File | null) {
         <article v-for="goal in home.goals" :key="goal.id" class="goal-card">
           <div class="goal-top">
             <div class="goal-title">
-              <span class="emoji">{{ goal.emoji }}</span>
+              <img v-if="goal.icon_url" :src="goal.icon_url" class="goal-icon" alt="" />
+              <span v-else class="emoji">{{ goal.emoji }}</span>
               {{ goal.title }}
             </div>
             <span class="pill amber">{{ goal.progress_percent }}%</span>
@@ -192,9 +212,28 @@ async function submit(note: string, photo: File | null) {
             />
           </div>
           <div class="muted" style="font-size: 12px">
-            {{ goal.earned_points }} / {{ goal.target_points }} 积分 ·
+            {{ goal.progress_value }} / {{ goal.target_value }}
+            {{ goal.progress_mode === 'points' ? '积分' : '次' }} ·
             {{ goal.task_count }} 个任务
           </div>
+          <div v-if="goal.stages.length" class="wish-meta">
+            <span
+              v-for="stage in goal.stages"
+              :key="stage.id"
+              class="pill"
+              :class="stage.achieved ? 'teal' : ''"
+            >
+              {{ stage.badge_emoji }} {{ stage.threshold_value }}
+            </span>
+          </div>
+          <p v-if="goal.next_stage" class="muted" style="font-size: 12px">
+            下一阶段「{{ goal.next_stage.badge_name }}」还差
+            {{ goal.next_stage.threshold_value - goal.progress_value }}
+            {{ goal.progress_mode === 'points' ? '积分' : '次' }}
+          </p>
+          <p v-else-if="goal.badge_name" class="muted" style="font-size: 12px">
+            完成可得成就「{{ goal.badge_name }}」
+          </p>
         </article>
       </div>
     </section>
@@ -223,6 +262,9 @@ async function submit(note: string, photo: File | null) {
           <div class="wish-meta">
             <span class="wish-cost">{{ reward.remaining_points }} 分</span>
             <span class="pill teal">已锁定 {{ reward.locked_points }}</span>
+            <span v-if="reward.matched_points" class="pill amber">
+              家长配捐 {{ reward.matched_points }}
+            </span>
             <span v-if="reward.estimated_days !== null" class="pill">
               约 {{ reward.estimated_days }} 天
             </span>

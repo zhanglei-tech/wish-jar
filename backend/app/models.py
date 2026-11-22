@@ -15,12 +15,15 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .constants import (
+    ALL_WEEKDAYS,
     GOAL_ACTIVE,
+    GOAL_PROGRESS_POINTS,
     LOCK_ACTIVE,
     REDEMPTION_PENDING,
     ROLE_CHILD,
     SUBMISSION_PENDING,
     TASK_DAILY,
+    WISH_PENDING,
 )
 from .db import Base
 from .timeutils import utcnow
@@ -68,14 +71,56 @@ class Goal(Base):
     )
     title: Mapped[str] = mapped_column(String(100), nullable=False)
     emoji: Mapped[str] = mapped_column(String(16), nullable=False, default="🎯")
+    icon_image_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     target_points: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    progress_mode: Mapped[str] = mapped_column(
+        String(20), nullable=False, default=GOAL_PROGRESS_POINTS
+    )
+    target_value: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    badge_name: Mapped[str] = mapped_column(String(100), nullable=False, default="")
+    badge_emoji: Mapped[str] = mapped_column(String(16), nullable=False, default="")
+    badge_image_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default=GOAL_ACTIVE)
+    completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False
     )
+
+
+class GoalStage(Base):
+    __tablename__ = "goal_stages"
+    __table_args__ = (
+        UniqueConstraint("goal_id", "sort_order", name="uq_goal_stage_order"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    goal_id: Mapped[int] = mapped_column(
+        ForeignKey("goals.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    threshold_value: Mapped[int] = mapped_column(Integer, nullable=False)
+    badge_name: Mapped[str] = mapped_column(String(100), nullable=False, default="")
+    badge_emoji: Mapped[str] = mapped_column(String(16), nullable=False, default="")
+    badge_image_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+
+class LevelThreshold(Base):
+    __tablename__ = "level_thresholds"
+    __table_args__ = (
+        UniqueConstraint("family_id", "level", name="uq_level_threshold_family"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    family_id: Mapped[int] = mapped_column(
+        ForeignKey("families.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    level: Mapped[int] = mapped_column(Integer, nullable=False)
+    required_points: Mapped[int] = mapped_column(Integer, nullable=False)
 
 
 class Task(Base):
@@ -91,6 +136,9 @@ class Task(Base):
     goal_id: Mapped[int | None] = mapped_column(
         ForeignKey("goals.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    reward_id: Mapped[int | None] = mapped_column(
+        ForeignKey("rewards.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     title: Mapped[str] = mapped_column(String(100), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     points: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -99,6 +147,15 @@ class Task(Base):
     )
     requires_photo: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False
+    )
+    active_weekdays: Mapped[str] = mapped_column(
+        String(20), nullable=False, default=ALL_WEEKDAYS
+    )
+    streak_threshold_days: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=7
+    )
+    streak_bonus_percent: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=25
     )
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -140,6 +197,8 @@ class Submission(Base):
     )
     review_note: Mapped[str] = mapped_column(Text, nullable=False, default="")
     points_awarded: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    bonus_points: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    bonus_percent: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
 class PointTransaction(Base):
@@ -183,9 +242,114 @@ class Reward(Base):
     is_long_term: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False
     )
+    auto_match_percent: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, nullable=False
+    )
+
+
+class ChildBadge(Base):
+    __tablename__ = "child_badges"
+    __table_args__ = (
+        UniqueConstraint("child_id", "kind", "level", name="uq_child_badge_level"),
+        UniqueConstraint(
+            "child_id", "goal_stage_id", name="uq_child_badge_stage"
+        ),
+        Index("ix_child_badges_child_awarded", "child_id", "awarded_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    family_id: Mapped[int] = mapped_column(
+        ForeignKey("families.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    child_id: Mapped[int] = mapped_column(
+        ForeignKey("members.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)
+    level: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    goal_id: Mapped[int | None] = mapped_column(
+        ForeignKey("goals.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    goal_stage_id: Mapped[int | None] = mapped_column(
+        ForeignKey("goal_stages.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    name: Mapped[str] = mapped_column(String(100), nullable=False, default="")
+    emoji: Mapped[str] = mapped_column(String(16), nullable=False, default="🏅")
+    image_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    awarded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+
+
+class Wish(Base):
+    __tablename__ = "wishes"
+    __table_args__ = (
+        Index("ix_wishes_child_status", "child_id", "status"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    family_id: Mapped[int] = mapped_column(
+        ForeignKey("families.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    child_id: Mapped[int] = mapped_column(
+        ForeignKey("members.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    title: Mapped[str] = mapped_column(String(100), nullable=False)
+    emoji: Mapped[str] = mapped_column(String(16), nullable=False, default="🌟")
+    image_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    reason: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    expected_points: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default=WISH_PENDING)
+    reward_id: Mapped[int | None] = mapped_column(
+        ForeignKey("rewards.id", ondelete="SET NULL"), nullable=True
+    )
+    reject_reason: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    reviewed_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("members.id"), nullable=True
+    )
+    reviewed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+
+
+class WishMatch(Base):
+    __tablename__ = "wish_matches"
+    __table_args__ = (
+        Index("ix_wish_matches_reward_status", "reward_id", "status"),
+        Index("ix_wish_matches_child_status", "child_id", "status"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    family_id: Mapped[int] = mapped_column(
+        ForeignKey("families.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    child_id: Mapped[int] = mapped_column(
+        ForeignKey("members.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    reward_id: Mapped[int] = mapped_column(
+        ForeignKey("rewards.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    parent_id: Mapped[int | None] = mapped_column(
+        ForeignKey("members.id"), nullable=True
+    )
+    amount: Mapped[int] = mapped_column(Integer, nullable=False)
+    used_amount: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    source: Mapped[str] = mapped_column(String(20), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    note: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    ratio_snapshot: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    redemption_id: Mapped[int | None] = mapped_column(
+        ForeignKey("redemptions.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+    voided_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
 
 

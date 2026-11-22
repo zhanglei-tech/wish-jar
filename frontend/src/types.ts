@@ -25,19 +25,66 @@ export interface AuthMe {
   family_name: string
 }
 
+export type ProgressMode = 'points' | 'task_count'
+export type WishStatus = 'pending' | 'listed' | 'rejected'
+export type StatsPeriod = 'week' | 'month' | 'quarter' | 'year'
+
+export interface GoalStage {
+  id: number
+  threshold_value: number
+  badge_name: string
+  badge_emoji: string
+  badge_image_path: string | null
+  badge_image_url: string | null
+  sort_order: number
+  achieved: boolean
+  badge_awarded: boolean
+}
+
+export interface GoalStagePayload {
+  id?: number
+  threshold_value: number
+  badge_name: string
+  badge_emoji: string
+  badge_image_path: string | null
+}
+
 export interface Goal {
   id: number
   child_id: number
   title: string
   emoji: string
+  icon_url: string | null
   description: string
+  progress_mode: ProgressMode
   target_points: number
+  target_value: number
+  badge_name: string
+  badge_emoji: string
+  badge_image_url: string | null
   start_date: string | null
   end_date: string | null
   status: 'active' | 'completed' | 'archived'
+  completed_at: string | null
   earned_points: number
+  progress_value: number
   progress_percent: number
   task_count: number
+  next_stage: GoalStage | null
+  stages: GoalStage[]
+}
+
+export interface Badge {
+  id: number
+  kind: 'level' | 'achievement'
+  level: number | null
+  goal_id: number | null
+  goal_stage_id: number | null
+  goal_title: string | null
+  name: string
+  emoji: string
+  image_url: string | null
+  awarded_at: string
 }
 
 export interface Task {
@@ -45,11 +92,18 @@ export interface Task {
   child_id: number
   goal_id: number | null
   goal_title: string | null
+  reward_id: number | null
+  reward_title: string | null
   title: string
   description: string
   points: number
   task_type: TaskType
   requires_photo: boolean
+  active_weekdays: number[]
+  streak_threshold_days: number
+  streak_bonus_percent: number
+  streak_days: number
+  bonus_active: boolean
   active: boolean
 }
 
@@ -76,6 +130,8 @@ export interface Submission {
   reviewed_at: string | null
   review_note: string
   points_awarded: number
+  bonus_points: number
+  bonus_percent: number
 }
 
 export interface Transaction {
@@ -96,7 +152,9 @@ export interface PointSummary {
   lifetime_earned: number
   level: number
   level_progress: number
+  next_level_points: number
   streak_days: number
+  badges: Badge[]
   transactions: Transaction[]
 }
 
@@ -112,6 +170,24 @@ export interface SavingsLock {
   released_at: string | null
 }
 
+export interface WishMatch {
+  id: number
+  reward_id: number
+  reward_title: string
+  child_id: number
+  child_name: string
+  parent_name: string
+  amount: number
+  used_amount: number
+  source: 'manual' | 'auto'
+  status: 'active' | 'used' | 'voided' | 'revoked'
+  note: string
+  ratio_snapshot: number | null
+  redemption_id: number | null
+  created_at: string
+  voided_at: string | null
+}
+
 export interface Reward {
   id: number
   title: string
@@ -123,12 +199,76 @@ export interface Reward {
   cost_points: number
   stock: number
   is_long_term: boolean
+  auto_match_percent: number
   active: boolean
   locked_points: number
+  manual_matched_points: number
+  auto_match_points: number
+  matched_points: number
+  saved_points: number
   progress_percent: number
   remaining_points: number
   estimated_days: number | null
   locks: SavingsLock[]
+  matches: WishMatch[]
+  linked_tasks: Task[]
+  reward_task_points: number
+  reward_task_count: number
+}
+
+export interface Wish {
+  id: number
+  child_id: number
+  child_name: string
+  title: string
+  emoji: string
+  image_url: string | null
+  reason: string
+  expected_points: number
+  status: WishStatus
+  reward_id: number | null
+  reward_title: string | null
+  reject_reason: string
+  created_at: string
+  reviewed_at: string | null
+}
+
+export interface StatsBucket {
+  label: string
+  task_points: number
+  bonus_points: number
+  redeemed_points: number
+  adjusted_points: number
+  net_points: number
+}
+
+export interface Stats {
+  child_id: number
+  child_name: string
+  period: StatsPeriod
+  label: string
+  start_date: string
+  end_date: string
+  task_points: number
+  bonus_points: number
+  redeemed_points: number
+  adjusted_points: number
+  net_points: number
+  task_completion: {
+    approved: number
+    expected: number
+    percent: number
+  }
+  redemption_count: number
+  redemption_points: number
+  redemption_statuses: Record<string, number>
+  buckets: StatsBucket[]
+  has_data: boolean
+}
+
+export interface LevelThreshold {
+  level: number
+  required_points: number
 }
 
 export interface Redemption {
@@ -156,7 +296,9 @@ export interface ChildHome {
   lifetime_earned: number
   level: number
   level_progress: number
+  next_level_points: number
   streak_days: number
+  badges: Badge[]
   today_tasks: TodayTask[]
   goals: Goal[]
   long_term_rewards: Reward[]
@@ -179,6 +321,7 @@ export interface ParentDashboard {
   pending_submissions: Submission[]
   pending_redemptions: Redemption[]
   unfulfilled_redemptions: Redemption[]
+  pending_wish_count: number
   active_locks: SavingsLock[]
   today_tasks: TodayTask[]
 }
@@ -212,21 +355,32 @@ export interface GoalPayload {
   child_id: number
   title: string
   emoji: string
+  icon_image_path?: string | null
   description: string
-  target_points: number
+  target_value?: number
+  target_points?: number
+  progress_mode?: ProgressMode
+  badge_name?: string
+  badge_emoji?: string
+  badge_image_path?: string | null
   start_date: string | null
   end_date: string | null
   status?: 'active' | 'completed' | 'archived'
+  stages?: GoalStagePayload[]
 }
 
 export interface TaskPayload {
   child_id: number
   goal_id: number | null
+  reward_id: number | null
   title: string
   description: string
   points: number
   task_type: TaskType
   requires_photo: boolean
+  active_weekdays: number[]
+  streak_threshold_days: number
+  streak_bonus_percent: number
   active: boolean
 }
 
@@ -239,7 +393,35 @@ export interface RewardPayload {
   multiplier: number
   stock: number
   is_long_term: boolean
+  auto_match_percent: number
   active: boolean
+}
+
+export interface WishPayload {
+  title: string
+  emoji: string
+  reason: string
+  expected_points: number
+  image?: File | null
+}
+
+export interface WishListPayload {
+  title?: string
+  emoji?: string
+  description?: string
+  value: number
+  unit: RewardUnit
+  multiplier: number
+  stock: number
+  is_long_term: boolean
+  auto_match_percent: number
+}
+
+export interface MatchPayload {
+  reward_id: number
+  child_id: number
+  amount: number
+  note?: string
 }
 
 export interface ReviewPayload {

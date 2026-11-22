@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { NButton, NSpin } from 'naive-ui'
 import { useRouter } from 'vue-router'
 import { api } from '../api'
@@ -12,6 +12,13 @@ const router = useRouter()
 const auth = useAuthStore()
 const home = ref<ChildHome | null>(null)
 const loading = ref(true)
+
+const levelBadges = computed(
+  () => home.value?.badges.filter((badge) => badge.kind === 'level') ?? [],
+)
+const achievementBadges = computed(
+  () => home.value?.badges.filter((badge) => badge.kind === 'achievement') ?? [],
+)
 
 onMounted(async () => {
   try {
@@ -49,7 +56,12 @@ async function logout() {
       <section class="profile-card">
         <div class="profile-face">{{ home.member.avatar }}</div>
         <h1>{{ home.member.name }}</h1>
-        <p>{{ home.family_name }} · Lv.{{ home.level }}</p>
+        <p>
+          {{ home.family_name }} · Lv.{{ home.level }}
+          <template v-if="home.next_level_points > 0">
+            · 再攒 {{ home.next_level_points }} 分升级
+          </template>
+        </p>
         <div class="profile-stats">
           <div>
             <strong>{{ home.balance }}</strong>
@@ -63,6 +75,68 @@ async function logout() {
             <strong>{{ home.streak_days }}</strong>
             <span>连续打卡</span>
           </div>
+        </div>
+      </section>
+
+      <section class="detail-card">
+        <div class="panel-head">
+          <div>
+            <h2>我的徽章</h2>
+            <p class="hint">升级和完成目标会留下徽章</p>
+          </div>
+          <span class="pill amber">{{ home.badges.length }} 枚</span>
+        </div>
+        <div v-if="home.badges.length === 0" class="muted" style="font-size: 13px">
+          还没有徽章。完成目标或攒够积分升级，就会得到第一枚。
+        </div>
+        <template v-else>
+          <div v-if="levelBadges.length" class="badge-group">
+            <p class="badge-group-title">等级徽章</p>
+            <div class="badge-wall">
+              <div v-for="badge in levelBadges" :key="badge.id" class="badge-item">
+                <img v-if="badge.image_url" :src="badge.image_url" alt="" />
+                <span v-else class="badge-emoji">{{ badge.emoji }}</span>
+                <span>{{ badge.name }}</span>
+              </div>
+            </div>
+          </div>
+          <div v-if="achievementBadges.length" class="badge-group">
+            <p class="badge-group-title">成就徽章</p>
+            <div class="badge-wall">
+              <div v-for="badge in achievementBadges" :key="badge.id" class="badge-item">
+                <img v-if="badge.image_url" :src="badge.image_url" alt="" />
+                <span v-else class="badge-emoji">{{ badge.emoji }}</span>
+                <span>{{ badge.name }}</span>
+              </div>
+            </div>
+          </div>
+        </template>
+      </section>
+
+      <section class="detail-card">
+        <h2>我的足迹</h2>
+        <div class="profile-links">
+          <router-link to="/wishes" class="profile-link">
+            <span>💌</span>
+            <div>
+              <strong>我的心愿</strong>
+              <small>写下想要的事，等家长看看</small>
+            </div>
+          </router-link>
+          <router-link to="/stats" class="profile-link">
+            <span>📊</span>
+            <div>
+              <strong>成长统计</strong>
+              <small>看看这段时间攒下的进步</small>
+            </div>
+          </router-link>
+          <router-link to="/rewards" class="profile-link">
+            <span>🎁</span>
+            <div>
+              <strong>心愿商店</strong>
+              <small>挑一个想靠近的愿望</small>
+            </div>
+          </router-link>
         </div>
       </section>
 

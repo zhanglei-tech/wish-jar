@@ -4,6 +4,8 @@ import type {
   ChildHome,
   Goal,
   GoalPayload,
+  LevelThreshold,
+  MatchPayload,
   MemberOut,
   MemberPayload,
   MemberPublic,
@@ -16,10 +18,16 @@ import type {
   SavingsLock,
   SetupPayload,
   SetupStatus,
+  Stats,
+  StatsPeriod,
   Submission,
   Task,
   TaskPayload,
   Transaction,
+  Wish,
+  WishListPayload,
+  WishMatch,
+  WishPayload,
 } from './types'
 
 const API_BASE = '/api'
@@ -212,6 +220,64 @@ export const api = {
     }),
   releaseSavings: (id: number) =>
     request<SavingsLock>(`/savings/${id}/release`, { method: 'POST' }),
+
+  uploadIcon: (file: File) => {
+    const form = new FormData()
+    form.set('file', file)
+    return request<{ path: string; url: string }>('/icons', {
+      method: 'POST',
+      body: form,
+    })
+  },
+
+  wishes: (status?: string) =>
+    request<Wish[]>(`/wishes${query({ status })}`),
+  createWish: (payload: WishPayload) => {
+    const form = new FormData()
+    form.set('title', payload.title)
+    form.set('emoji', payload.emoji)
+    form.set('reason', payload.reason)
+    form.set('expected_points', String(payload.expected_points))
+    if (payload.image) form.set('image', payload.image)
+    return request<Wish>('/wishes', { method: 'POST', body: form })
+  },
+  listWish: (id: number, payload: WishListPayload) =>
+    request<Wish>(`/wishes/${id}/list`, { method: 'POST', json: payload }),
+  rejectWish: (id: number, reason: string) =>
+    request<Wish>(`/wishes/${id}/reject`, {
+      method: 'POST',
+      json: { reason },
+    }),
+
+  matches: (params: {
+    childId?: number
+    rewardId?: number
+    includeClosed?: boolean
+  } = {}) =>
+    request<WishMatch[]>(
+      `/matches${query({
+        child_id: params.childId,
+        reward_id: params.rewardId,
+        include_closed: params.includeClosed,
+      })}`,
+    ),
+  createMatch: (payload: MatchPayload) =>
+    request<WishMatch>('/matches', { method: 'POST', json: payload }),
+  revokeMatch: (id: number) =>
+    request<WishMatch>(`/matches/${id}/revoke`, { method: 'POST' }),
+
+  levels: () =>
+    request<{ thresholds: LevelThreshold[] }>('/levels'),
+  updateLevels: (thresholds: LevelThreshold[]) =>
+    request<{ thresholds: LevelThreshold[] }>('/levels', {
+      method: 'PUT',
+      json: { thresholds },
+    }),
+
+  stats: (period: StatsPeriod, childId?: number) =>
+    request<Stats>(`/stats${query({ period, child_id: childId })}`),
+  statsExportUrl: (period: StatsPeriod, childId?: number) =>
+    `${API_BASE}/stats/export${query({ period, child_id: childId })}`,
 
   childHome: () => request<ChildHome>('/child/home'),
   parentDashboard: () => request<ParentDashboard>('/parent/dashboard'),

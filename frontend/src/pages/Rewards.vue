@@ -49,6 +49,11 @@ onMounted(async () => {
       </router-link>
     </header>
 
+    <div class="section-heading" style="margin-top: 4px">
+      <h2>可以兑换的愿望</h2>
+      <router-link to="/wishes" class="text-link">我的心愿 →</router-link>
+    </div>
+
     <div v-if="error">
       <EmptyState emoji="🫙" title="心愿商店暂时打不开" :text="error" />
     </div>
@@ -83,6 +88,9 @@ onMounted(async () => {
           <span class="pill">{{ stockLabel(reward.stock) }}</span>
           <span v-if="reward.is_long_term && reward.locked_points" class="pill teal">
             已锁定 {{ reward.locked_points }}
+          </span>
+          <span v-if="reward.is_long_term && reward.matched_points" class="pill amber">
+            配捐 {{ reward.matched_points }}
           </span>
           <span v-if="reward.is_long_term && reward.estimated_days !== null" class="pill amber">
             约 {{ reward.estimated_days }} 天

@@ -53,7 +53,8 @@ const adjusting = ref(false)
 const pendingCount = computed(
   () =>
     (dashboard.value?.pending_submissions.length ?? 0) +
-    (dashboard.value?.pending_redemptions.length ?? 0),
+    (dashboard.value?.pending_redemptions.length ?? 0) +
+    (dashboard.value?.pending_wish_count ?? 0),
 )
 
 const reviewTitle = computed(() =>
@@ -254,6 +255,19 @@ async function adjustPoints() {
     </div>
 
     <template v-else-if="dashboard">
+      <router-link
+        v-if="dashboard.pending_wish_count > 0"
+        to="/parent/wishes"
+        class="panel wish-banner"
+      >
+        <span class="wish-banner-emoji">💌</span>
+        <div class="wish-banner-copy">
+          <strong>{{ dashboard.pending_wish_count }} 个孩子心愿等待定价</strong>
+          <span>看看它们，也许能变成下一件值得期待的奖励。</span>
+        </div>
+        <span class="text-link">去处理 →</span>
+      </router-link>
+
       <section class="panel">
         <div class="panel-head">
           <div>

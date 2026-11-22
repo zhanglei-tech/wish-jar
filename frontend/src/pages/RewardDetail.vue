@@ -37,7 +37,7 @@ const canRedeem = computed(() => {
   if (!reward.value || !points.value) return false
   if (!reward.value.active || reward.value.stock === 0) return false
   return (
-    points.value.available + reward.value.locked_points >=
+    points.value.available + reward.value.locked_points + reward.value.matched_points >=
     reward.value.cost_points
   )
 })
@@ -179,10 +179,19 @@ function redeem() {
           <span class="muted" style="font-size: 12px">
             还差 {{ reward.remaining_points }} 积分
           </span>
+          <span v-if="reward.matched_points" class="pill amber">
+            家长配捐 {{ reward.matched_points }}
+          </span>
+          <span v-if="reward.auto_match_percent" class="pill">
+            兑换时自动配捐 {{ reward.auto_match_percent }}%
+          </span>
           <span v-if="reward.estimated_days !== null" class="pill amber">
             按最近节奏约 {{ reward.estimated_days }} 天
           </span>
         </div>
+        <p v-if="reward.matched_points" class="muted" style="font-size: 11px">
+          配捐是家长额外支持的部分，兑换时优先使用，不会增加可用积分。
+        </p>
 
         <div class="lock-form">
           <n-input-number
@@ -212,6 +221,22 @@ function redeem() {
               {{ formatDate(lock.created_at) }} · {{ lock.amount }} 积分
             </span>
             <span class="pill teal">{{ lockStatusLabel(lock.status) }}</span>
+          </div>
+        </div>
+      </section>
+
+      <section v-if="reward.linked_tasks.length" class="detail-card">
+        <div class="panel-head">
+          <div>
+            <h2>专属任务</h2>
+            <p class="hint">完成这些任务获得的积分会汇总在这里，兑换时仍按正常积分计算。</p>
+          </div>
+          <span class="pill amber">{{ reward.reward_task_points }} 积分</span>
+        </div>
+        <div class="lock-list">
+          <div v-for="task in reward.linked_tasks" :key="task.id" class="lock-row">
+            <span>{{ task.title }}</span>
+            <span class="pill">+{{ task.points }}</span>
           </div>
         </div>
       </section>
