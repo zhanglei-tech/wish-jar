@@ -1,0 +1,26 @@
+services:
+  wish-jar:
+    build: .
+    container_name: wish-jar
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    environment:
+      SECRET_KEY: "${SECRET_KEY:?请先在 .env 中设置 SECRET_KEY}"
+      COOKIE_SECURE: "${COOKIE_SECURE:-false}"
+      TIMEZONE: "${TZ:-Asia/Shanghai}"
+      TZ: "${TZ:-Asia/Shanghai}"
+    volumes:
+      - ./data:/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
