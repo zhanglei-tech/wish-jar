@@ -1,0 +1,28 @@
+# 群晖 / 远程主机使用：只拉取 GHCR 镜像，不构建，也不需要源码。
+# 使用前在 .env 中设置 WISH_JAR_IMAGE 和 SECRET_KEY。
+services:
+  wish-jar:
+    image: "${WISH_JAR_IMAGE:?请先在 .env 中设置 WISH_JAR_IMAGE，例如 ghcr.io/your-name/wish-jar:1.0.0}"
+    container_name: wish-jar
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    environment:
+      SECRET_KEY: "${SECRET_KEY:?请先在 .env 中设置 SECRET_KEY}"
+      COOKIE_SECURE: "${COOKIE_SECURE:-false}"
+      TIMEZONE: "${TZ:-Asia/Shanghai}"
+      TZ: "${TZ:-Asia/Shanghai}"
+    volumes:
+      - ./data:/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
