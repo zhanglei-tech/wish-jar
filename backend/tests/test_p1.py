@@ -157,6 +157,10 @@ def test_level_thresholds_and_badges(client):
     assert points["level"] == 3
     level_badges = [badge for badge in points["badges"] if badge["kind"] == "level"]
     assert {badge["level"] for badge in level_badges} == {2, 3}
+    assert {badge["level"]: badge["name"] for badge in level_badges} == {
+        2: "初芽",
+        3: "新叶",
+    }
 
     invalid = [
         {"level": level, "required_points": 100}

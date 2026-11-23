@@ -5,7 +5,9 @@ import { useRouter } from 'vue-router'
 import { api } from '../api'
 import ChildNav from '../components/ChildNav.vue'
 import EmptyState from '../components/EmptyState.vue'
+import LevelBadge from '../components/LevelBadge.vue'
 import VersionLabel from '../components/VersionLabel.vue'
+import { levelBadgeName } from '../levels'
 import { useAuthStore } from '../stores/auth'
 import type { ChildHome } from '../types'
 
@@ -95,9 +97,21 @@ async function logout() {
             <p class="badge-group-title">等级徽章</p>
             <div class="badge-wall">
               <div v-for="badge in levelBadges" :key="badge.id" class="badge-item">
-                <img v-if="badge.image_url" :src="badge.image_url" alt="" />
+                <LevelBadge
+                  v-if="badge.level"
+                  :level="badge.level"
+                  :size="44"
+                  class="badge-level-icon"
+                />
+                <img v-else-if="badge.image_url" :src="badge.image_url" alt="" />
                 <span v-else class="badge-emoji">{{ badge.emoji }}</span>
-                <span>{{ badge.name }}</span>
+                <span>
+                  {{
+                    badge.level
+                      ? `Lv.${badge.level} · ${levelBadgeName(badge.level)}`
+                      : badge.name
+                  }}
+                </span>
               </div>
             </div>
           </div>

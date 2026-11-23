@@ -5,7 +5,9 @@ import { useRouter } from 'vue-router'
 import { api } from '../api'
 import ChildNav from '../components/ChildNav.vue'
 import EmptyState from '../components/EmptyState.vue'
+import LevelBadge from '../components/LevelBadge.vue'
 import TaskSubmitModal from '../components/TaskSubmitModal.vue'
+import { levelBadgeName } from '../levels'
 import WishJar from '../components/WishJar.vue'
 import type { ChildHome, TodayTask } from '../types'
 import {
@@ -122,7 +124,10 @@ async function submit(note: string, photo: File | null) {
       />
       <div class="hero-copy">
         <div class="level-row">
-          <span class="level-badge">Lv.{{ home.level }}</span>
+          <span class="level-badge" :class="{ 'level-badge-current': home.level >= 2 }">
+            <LevelBadge v-if="home.level >= 2" :level="home.level" :size="32" />
+            <span>Lv.{{ home.level }} {{ levelBadgeName(home.level) }}</span>
+          </span>
           <span class="muted">
             {{ home.next_level_points > 0 ? `再攒 ${home.next_level_points} 分升级` : '已经是最高等级' }}
           </span>

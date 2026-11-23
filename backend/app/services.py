@@ -89,6 +89,29 @@ from .timeutils import (
 )
 
 DEFAULT_LEVEL_STEP = 100
+# 与 frontend/src/levels.ts 的 LEVEL_NAMES 保持一致。
+LEVEL_BADGE_NAMES = {
+    1: "初心",
+    2: "初芽",
+    3: "新叶",
+    4: "嫩枝",
+    5: "青枝",
+    6: "小树",
+    7: "繁叶",
+    8: "含苞",
+    9: "初绽",
+    10: "盛放",
+    11: "初果",
+    12: "双果",
+    13: "丰果",
+    14: "晶叶",
+    15: "晶枝",
+    16: "晶树",
+    17: "星辉",
+    18: "星河",
+    19: "星域",
+    20: "星辉王冠",
+}
 LEVEL_BADGE_EMOJI = {
     range(2, 5): "🌱",
     range(5, 8): "🌿",
@@ -445,6 +468,10 @@ def level_info(db: Session, family_id: int, lifetime: int) -> tuple[int, int, in
     return level, progress, next_points
 
 
+def level_badge_name(level: int) -> str:
+    return LEVEL_BADGE_NAMES.get(level, f"Lv.{level} 徽章")
+
+
 def level_badge_emoji(level: int) -> str:
     for span, emoji in LEVEL_BADGE_EMOJI.items():
         if level in span:
@@ -461,7 +488,11 @@ def serialize_badge(db: Session, badge: ChildBadge) -> BadgeOut:
         goal_id=badge.goal_id,
         goal_stage_id=badge.goal_stage_id,
         goal_title=goal.title if goal else None,
-        name=badge.name,
+        name=(
+            level_badge_name(badge.level)
+            if badge.kind == BADGE_LEVEL and badge.level is not None
+            else badge.name
+        ),
         emoji=badge.emoji,
         image_url=media_url(badge.image_path),
         awarded_at=badge.awarded_at,
@@ -497,7 +528,7 @@ def _award_level_badges(db: Session, child: Member, lifetime: int) -> None:
                 child_id=child.id,
                 kind=BADGE_LEVEL,
                 level=value,
-                name=f"Lv.{value} 徽章",
+                name=level_badge_name(value),
                 emoji=level_badge_emoji(value),
             )
         )

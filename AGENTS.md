@@ -249,6 +249,6 @@ cd frontend && npm run build && npm run typecheck
 
 ## 13. 当前阶段
 
-- 需求版本：v0.19，状态为“已定稿”，见 `docs/PRD.md`。
+- 需求版本：v0.21，状态为“已定稿”，见 `docs/PRD.md`。
 - MVP 与 P1 已实现；当前支持最小 PWA 安装能力、更新提示与语义版本号显示（无离线缓存）。
 - 新增需求先更新 PRD，再改代码；P2 不提前实现。

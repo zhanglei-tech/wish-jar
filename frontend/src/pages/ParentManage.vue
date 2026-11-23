@@ -11,7 +11,9 @@ import {
 } from 'naive-ui'
 import { api } from '../api'
 import EmptyState from '../components/EmptyState.vue'
+import LevelBadge from '../components/LevelBadge.vue'
 import ParentNav from '../components/ParentNav.vue'
+import { levelBadgeName } from '../levels'
 import VersionLabel from '../components/VersionLabel.vue'
 import type {
   Goal,
@@ -1182,10 +1184,18 @@ onMounted(load)
 
         <div class="level-grid">
           <div class="level-item level-item-base">
-            <span class="level-tag">Lv.1</span>
-            <span class="level-base-value">0</span>
-            <span class="level-unit">积分</span>
-            <span class="level-delta">起点</span>
+            <LevelBadge :level="1" :size="40" class="level-item-badge" />
+            <div class="level-item-body">
+              <div class="level-item-title">
+                <span class="level-tag">Lv.1</span>
+                <span class="level-name">{{ levelBadgeName(1) }}</span>
+              </div>
+              <div class="level-item-controls">
+                <span class="level-base-value">0</span>
+                <span class="level-unit">积分</span>
+                <span class="level-delta">起点</span>
+              </div>
+            </div>
           </div>
           <label
             v-for="(item, index) in levelThresholds"
@@ -1193,22 +1203,30 @@ onMounted(load)
             class="level-item"
             :class="{ invalid: invalidLevels.has(item.level) }"
           >
-            <span class="level-tag">Lv.{{ item.level }}</span>
-            <input
-              v-model.number="item.required_points"
-              type="number"
-              min="1"
-              inputmode="numeric"
-              class="native-input level-input"
-            />
-            <span class="level-unit">积分</span>
-            <span class="level-delta">
-              {{
-                index === 0
-                  ? '起点'
-                  : `+${item.required_points - levelThresholds[index - 1].required_points}`
-              }}
-            </span>
+            <LevelBadge :level="item.level" :size="40" class="level-item-badge" />
+            <div class="level-item-body">
+              <div class="level-item-title">
+                <span class="level-tag">Lv.{{ item.level }}</span>
+                <span class="level-name">{{ levelBadgeName(item.level) }}</span>
+              </div>
+              <div class="level-item-controls">
+                <input
+                  v-model.number="item.required_points"
+                  type="number"
+                  min="1"
+                  inputmode="numeric"
+                  class="native-input level-input"
+                />
+                <span class="level-unit">积分</span>
+                <span class="level-delta">
+                  {{
+                    index === 0
+                      ? '起点'
+                      : `+${item.required_points - levelThresholds[index - 1].required_points}`
+                  }}
+                </span>
+              </div>
+            </div>
           </label>
         </div>
         <p v-if="invalidLevels.size > 0" class="level-error">
