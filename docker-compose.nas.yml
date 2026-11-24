@@ -5,6 +5,8 @@ services:
     image: "${WISH_JAR_IMAGE:?请先在 .env 中设置 WISH_JAR_IMAGE，例如 ghcr.io/zhanglei-tech/wish-jar:1.0.0}"
     container_name: wish-jar
     restart: unless-stopped
+    # 使用 latest 等浮动标签时，up 前会先拉取远端镜像；用具体版本标签时保持 missing 即可。
+    pull_policy: "${IMAGE_PULL_POLICY:-missing}"
     ports:
       - "${APP_PORT:-8000}:8000"
     environment:

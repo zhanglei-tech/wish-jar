@@ -152,6 +152,19 @@ docker compose -f docker-compose.nas.yml up -d
 
 更新版本时只改 `.env` 里的 `WISH_JAR_IMAGE`，再执行上面两条命令；回滚就把标签改回上一个版本。
 
+**用 latest 省去手动 pull**：改成 `WISH_JAR_IMAGE=ghcr.io/zhanglei-tech/wish-jar:latest`，并在 `.env` 中加一行：
+
+```dotenv
+IMAGE_PULL_POLICY=always
+```
+
+之后 `docker compose -f docker-compose.nas.yml up -d` 会自动先拉取最新镜像。想让群晖定时检查，可把 `always` 换成 `every_12h`，再把这条 `up -d` 交给计划任务，或直接拉一次镜像并重启容器。
+
+自动更新后留意两点：
+
+- 旧镜像会留在本地，占空间但不影响运行；确认新版本正常后可以清理，例如 `docker image prune -a --filter "until=336h"` 只删一周前的无用镜像。
+- latest 无法分辨具体版本，页面上的版本号仍取镜像构建时注入的 tag；需要回滚时，把标签改成具体版本（如 `1.1.4`）再 up 即可。
+
 说明：
 
 - 默认只构建 `linux/amd64`，适合大多数群晖型号。ARM 群晖可在仓库 Settings → Secrets and variables → Actions → Variables 新建 `IMAGE_PLATFORMS=linux/amd64,linux/arm64`，或在手动运行工作流时填写。

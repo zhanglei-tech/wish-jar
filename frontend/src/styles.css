@@ -1017,6 +1017,10 @@ button.task-card:hover {
   gap: 10px;
 }
 
+.task-target-row {
+  grid-template-columns: minmax(0, 2fr) minmax(0, 5fr);
+}
+
 .field-row.three {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.9fr);
 }

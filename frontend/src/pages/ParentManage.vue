@@ -1583,7 +1583,7 @@ onMounted(load)
       :style="{ width: 'min(560px, 92vw)' }"
     >
       <div class="modal-form">
-        <div class="field-row">
+        <div class="field-row task-target-row">
           <div class="field">
             <label>孩子</label>
             <select v-model="taskForm.child_id" class="native-input" :disabled="Boolean(editingTask)">
