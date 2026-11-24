@@ -22,6 +22,7 @@ import type {
   LevelThreshold,
   MemberOut,
   MemberPayload,
+  ParentTask,
   ProgressMode,
   Reward,
   RewardPayload,
@@ -72,6 +73,31 @@ const filteredTasks = computed(() =>
     ? tasks.value
     : tasks.value.filter((task) => task.child_id === selectedChildId.value),
 )
+const parentTasks = ref<ParentTask[]>([])
+const filteredParentTasks = computed(() =>
+  parentTasks.value.filter((task) => selectedChildId.value === null || task.child_id === selectedChildId.value),
+)
+const activeChildren = computed(() => children.value.filter((child) => child.is_active))
+const activeParents = computed(() => members.value.filter((member) => member.role === 'parent' && member.is_active))
+const parentTasksLoading = ref(false)
+const parentTasksError = ref('')
+
+async function loadParentTasks() {
+  if (parentTasksLoading.value) return
+  parentTasksLoading.value = true
+  parentTasksError.value = ''
+  try {
+    parentTasks.value = await api.parentTasks()
+  } catch (err) {
+    parentTasksError.value = err instanceof Error ? err.message : '家长任务暂时打不开'
+  } finally {
+    parentTasksLoading.value = false
+  }
+}
+
+watch(activeTab, (tab) => {
+  if (tab === 'tasks') void loadParentTasks()
+})
 
 const roleOptions: { label: string; value: Role }[] = [
   { label: '家长', value: 'parent' },
@@ -481,8 +507,12 @@ function deleteGoal(goal: Goal) {
 
 const taskOpen = ref(false)
 const editingTask = ref<Task | null>(null)
+const editingParentTask = ref<ParentTask | null>(null)
+const taskAudience = ref<Role>('child')
+const parentTaskSaving = ref(false)
 const taskForm = reactive({
   child_id: null as number | null,
+  assigned_parent_id: null as number | null,
   goal_id: null as number | null,
   reward_id: null as number | null,
   title: '',
@@ -538,8 +568,11 @@ function openNewTask() {
     return
   }
   editingTask.value = null
+  editingParentTask.value = null
+  taskAudience.value = 'child'
   Object.assign(taskForm, {
     child_id: child,
+    assigned_parent_id: null,
     goal_id: null,
     reward_id: null,
     title: '',
@@ -555,8 +588,77 @@ function openNewTask() {
   taskOpen.value = true
 }
 
+function changeTaskAudience() {
+  const choices = taskAudience.value === 'parent' ? activeChildren.value : children.value
+  if (!choices.some((child) => child.id === taskForm.child_id)) {
+    taskForm.child_id = choices[0]?.id ?? null
+  }
+}
+
+function openEditParentTask(task: ParentTask) {
+  editingTask.value = null
+  editingParentTask.value = task
+  taskAudience.value = 'parent'
+  Object.assign(taskForm, {
+    child_id: task.child_id,
+    assigned_parent_id: task.assigned_parent_id,
+    title: task.title,
+    description: task.description,
+    points: task.points,
+    task_type: task.task_type,
+    active: task.active,
+    active_weekdays: [...task.active_weekdays],
+  })
+  taskOpen.value = true
+}
+
+async function saveParentTask() {
+  if (parentTaskSaving.value) return
+  const { child_id, assigned_parent_id, task_type, active, description, active_weekdays } = taskForm
+  const title = taskForm.title.trim()
+  const points = taskForm.points
+  const existing = editingParentTask.value
+  if (!title) return message.warning('请填写任务名字')
+  if (!Number.isInteger(points) || points < 0 || points > 1000) {
+    return message.warning('积分须为 0 至 1000 的整数')
+  }
+  if (task_type === 'daily' && active_weekdays.length === 0) {
+    return message.warning('至少选择一个适用星期')
+  }
+  const fields = { title, description, points, active }
+  const weekdays = task_type === 'daily' ? [...active_weekdays] : weekdayOptions.map((day) => day.value)
+  parentTaskSaving.value = true
+  try {
+    if (existing) {
+      const saved = await api.updateParentTask(existing.id, {
+        ...fields,
+        ...(task_type === 'daily' ? { active_weekdays: weekdays } : {}),
+      })
+      parentTasks.value = parentTasks.value.map((task) => task.id === saved.id ? saved : task)
+    } else {
+      if (child_id === null || assigned_parent_id === null ||
+          !activeChildren.value.some((child) => child.id === child_id) ||
+          !activeParents.value.some((parent) => parent.id === assigned_parent_id)) {
+        return message.warning('请选择已启用的执行家长和受益孩子')
+      }
+      const saved = await api.createParentTask({
+        ...fields, child_id, assigned_parent_id, task_type, active_weekdays: weekdays,
+      })
+      parentTasks.value = [...parentTasks.value, saved]
+    }
+    taskOpen.value = false
+    message.success('家长任务已保存')
+  } catch (err) {
+    message.error(err instanceof Error ? err.message : '保存失败')
+  } finally {
+    parentTaskSaving.value = false
+  }
+}
+
 function openEditTask(task: Task) {
   editingTask.value = task
+  editingParentTask.value = null
+  taskAudience.value = 'child'
   Object.assign(taskForm, {
     child_id: task.child_id,
     goal_id: task.goal_id,
@@ -575,6 +677,7 @@ function openEditTask(task: Task) {
 }
 
 async function saveTask() {
+  if (taskAudience.value === 'parent') return saveParentTask()
   if (!taskForm.child_id || !taskForm.title.trim()) {
     message.warning('请选择孩子并填写任务名字')
     return
@@ -1110,7 +1213,7 @@ onMounted(load)
                 {{ child.avatar }} {{ child.name }}
               </option>
             </select>
-            <n-button type="primary" @click="openNewTask">添加任务</n-button>
+            <n-button class="parent-task-control" type="primary" @click="openNewTask">添加任务</n-button>
           </div>
         </div>
         <div v-if="filteredTasks.length === 0" class="manage-list">
@@ -1138,6 +1241,35 @@ onMounted(load)
             </div>
           </div>
         </div>
+        <section class="manage-list parent-task-management" aria-labelledby="parent-task-list-heading">
+          <div class="panel-head">
+            <div>
+              <h2 id="parent-task-list-heading">家长任务</h2>
+              <p class="hint">家长完成，孩子确认后获得积分</p>
+            </div>
+          </div>
+          <n-spin v-if="parentTasksLoading" aria-label="正在加载家长任务" />
+          <div v-else-if="parentTasksError" class="manage-row">
+            <p class="muted">{{ parentTasksError }}</p>
+            <n-button class="parent-task-control" tertiary @click="loadParentTasks">重试</n-button>
+          </div>
+          <p v-else-if="filteredParentTasks.length === 0" class="muted">还没有家长任务。</p>
+          <div v-else class="manage-list">
+            <div v-for="task in filteredParentTasks" :key="task.id" class="manage-row">
+              <div class="row-main">
+                <strong>{{ task.title }}</strong>
+                <span>{{ task.assigned_parent_name }} 执行 · {{ task.child_name }} 受益</span>
+                <span>
+                  +{{ task.points }} 积分 · {{ taskTypeLabel(task.task_type) }} · {{ task.active ? '启用' : '停用' }}
+                  <template v-if="task.task_type === 'daily' && task.active_weekdays.length < 7"> · {{ weekdayLabel(task.active_weekdays) }}</template>
+                </span>
+              </div>
+              <div class="row-actions">
+                <n-button class="parent-task-control" tertiary @click="openEditParentTask(task)">编辑</n-button>
+              </div>
+            </div>
+          </div>
+        </section>
       </section>
 
       <section v-if="activeTab === 'rewards'" class="panel">
@@ -1579,20 +1711,45 @@ onMounted(load)
     <n-modal
       v-model:show="taskOpen"
       preset="card"
-      :title="editingTask ? '编辑任务' : '添加任务'"
+      :title="editingParentTask ? '编辑家长任务' : editingTask ? '编辑任务' : '添加任务'"
       :style="{ width: 'min(560px, 92vw)' }"
+      :mask-closable="!parentTaskSaving"
+      :close-on-esc="!parentTaskSaving"
+      :closable="taskAudience === 'child'"
     >
       <div class="modal-form">
+        <div v-if="!editingTask && !editingParentTask" class="field">
+          <label for="task-audience">任务类型</label>
+          <select id="task-audience" v-model="taskAudience" class="native-input" :disabled="parentTaskSaving" @change="changeTaskAudience">
+            <option value="child">孩子任务</option>
+            <option value="parent">家长任务</option>
+          </select>
+        </div>
+        <p v-if="editingParentTask" class="hint">若要更换执行家长、受益孩子或周期，请停用旧任务并新建。</p>
         <div class="field-row task-target-row">
           <div class="field">
-            <label>孩子</label>
-            <select v-model="taskForm.child_id" class="native-input" :disabled="Boolean(editingTask)">
-              <option v-for="child in children" :key="child.id" :value="child.id">
-                {{ child.avatar }} {{ child.name }}
-              </option>
+            <label for="task-child">{{ taskAudience === 'parent' ? '受益孩子' : '孩子' }}</label>
+            <select id="task-child" v-model="taskForm.child_id" class="native-input" :disabled="Boolean(editingTask || editingParentTask)">
+              <option v-if="editingParentTask" :value="editingParentTask.child_id">{{ editingParentTask.child_name }}</option>
+              <template v-else>
+                <option v-if="taskAudience === 'parent' && !activeChildren.length" :value="null" disabled>没有已启用的孩子</option>
+                <option v-for="child in (taskAudience === 'parent' ? activeChildren : children)" :key="child.id" :value="child.id">
+                  {{ child.avatar }} {{ child.name }}
+                </option>
+              </template>
             </select>
           </div>
-          <div class="field">
+          <div v-if="taskAudience === 'parent'" class="field">
+            <label for="assigned-parent">执行家长</label>
+            <select id="assigned-parent" v-model="taskForm.assigned_parent_id" class="native-input" :disabled="Boolean(editingParentTask)">
+              <option v-if="editingParentTask" :value="editingParentTask.assigned_parent_id">{{ editingParentTask.assigned_parent_name }}</option>
+              <template v-else>
+                <option :value="null" disabled>{{ activeParents.length ? '请选择家长' : '没有已启用的家长' }}</option>
+                <option v-for="parent in activeParents" :key="parent.id" :value="parent.id">{{ parent.avatar }} {{ parent.name }}</option>
+              </template>
+            </select>
+          </div>
+          <div v-else class="field">
             <label>关联目标（可选）</label>
             <select v-model="taskForm.goal_id" class="native-input">
               <option :value="null">不关联目标</option>
@@ -1602,7 +1759,7 @@ onMounted(load)
             </select>
           </div>
         </div>
-        <div class="field">
+        <div v-if="taskAudience === 'child'" class="field">
           <label>奖励专属任务（可选）</label>
           <select v-model="taskForm.reward_id" class="native-input">
             <option :value="null">不关联奖励</option>
@@ -1624,16 +1781,17 @@ onMounted(load)
             v-model:value="taskForm.description"
             type="textarea"
             :autosize="{ minRows: 2, maxRows: 3 }"
+            :maxlength="taskAudience === 'parent' ? 1000 : undefined"
           />
         </div>
         <div class="field-row three">
           <div class="field">
             <label>积分</label>
-            <input v-model.number="taskForm.points" type="number" min="0" max="10000" class="native-input" />
+            <input v-model.number="taskForm.points" type="number" min="0" :max="taskAudience === 'parent' ? 1000 : 10000" class="native-input" />
           </div>
           <div class="field">
             <label>周期</label>
-            <select v-model="taskForm.task_type" class="native-input">
+            <select v-model="taskForm.task_type" class="native-input" :disabled="Boolean(editingParentTask)">
               <option v-for="option in taskTypeOptions" :key="option.value" :value="option.value">
                 {{ option.label }}
               </option>
@@ -1654,18 +1812,20 @@ onMounted(load)
               v-for="day in weekdayOptions"
               :key="day.value"
               type="button"
-              class="weekday-chip"
+              class="weekday-chip parent-task-control"
               :class="{ active: taskForm.active_weekdays.includes(day.value) }"
+              :aria-pressed="taskForm.active_weekdays.includes(day.value)"
+              :aria-label="`星期${day.label}`"
               @click="toggleWeekday(day.value)"
             >
               {{ day.label }}
             </button>
           </div>
           <p class="hint" style="margin: 6px 0 0">
-            只在选中的星期出现；不选的日期不计入连续打卡，也不会中断连续。
+            只在选中的星期出现。<template v-if="taskAudience === 'child'">不选的日期不计入连续打卡，也不会中断连续。</template>
           </p>
         </div>
-        <div v-if="taskForm.task_type === 'daily'" class="field-row three">
+        <div v-if="taskAudience === 'child' && taskForm.task_type === 'daily'" class="field-row three">
           <div class="field">
             <label>连续天数门槛</label>
             <input
@@ -1695,7 +1855,7 @@ onMounted(load)
             />
           </div>
         </div>
-        <div class="check-row">
+        <div v-if="taskAudience === 'child'" class="check-row">
           <div>
             <strong>需要照片凭证</strong>
             <span>孩子提交时必须上传一张照片</span>
@@ -1705,8 +1865,14 @@ onMounted(load)
       </div>
       <template #footer>
         <div class="modal-footer">
-          <n-button @click="taskOpen = false">取消</n-button>
-          <n-button type="primary" @click="saveTask">保存</n-button>
+          <n-button class="parent-task-control" :disabled="parentTaskSaving" @click="taskOpen = false">取消</n-button>
+          <n-button
+            class="parent-task-control"
+            type="primary"
+            :loading="parentTaskSaving"
+            :disabled="taskAudience === 'parent' && parentTasksLoading"
+            @click="saveTask"
+          >保存</n-button>
         </div>
       </template>
     </n-modal>

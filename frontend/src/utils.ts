@@ -97,6 +97,14 @@ export function greeting(): string {
   return '晚上好'
 }
 
+export function transactionKindLabel(kind: string): string {
+  if (kind === 'parent_task') return '家长任务'
+  if (kind === 'task') return '任务'
+  if (kind === 'streak_bonus') return '连续奖励'
+  if (kind === 'redeem') return '兑换'
+  return '调整'
+}
+
 export function signedPoints(delta: number): string {
   return `${delta > 0 ? '+' : ''}${delta}`
 }

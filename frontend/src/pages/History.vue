@@ -10,6 +10,7 @@ import {
   formatDateTime,
   redemptionStatusLabel,
   signedPoints,
+  transactionKindLabel,
 } from '../utils'
 
 const auth = useAuthStore()
@@ -45,7 +46,7 @@ onMounted(async () => {
       <div>
         <p class="eyebrow">YOUR LITTLE TRAIL</p>
         <h1 class="display-title">积分足迹</h1>
-        <p class="muted">每一分，都是你认真做过的事。</p>
+        <p class="muted">记录你和家长存进心愿罐的每一分。</p>
       </div>
       <router-link to="/me" class="avatar-button" aria-label="我的">
         {{ auth.member?.avatar || '🌱' }}
@@ -92,7 +93,8 @@ onMounted(async () => {
               <strong>{{ transaction.note }}</strong>
               <span>
                 {{ formatDateTime(transaction.created_at) }} ·
-                {{ transaction.kind === 'task' ? '任务' : transaction.kind === 'redeem' ? '兑换' : '调整' }}
+                {{ transactionKindLabel(transaction.kind) }}
+                <template v-if="transaction.contributor_name"> · 贡献者：{{ transaction.contributor_name }}</template>
               </span>
             </div>
             <span

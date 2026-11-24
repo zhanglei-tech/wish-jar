@@ -118,6 +118,48 @@ export interface TodayTask extends Task {
   submission_id: number | null
 }
 
+export interface ParentTaskPayload {
+  child_id: number
+  assigned_parent_id: number
+  title: string
+  description: string
+  points: number
+  task_type: TaskType
+  active_weekdays: number[]
+  active: boolean
+}
+
+export type ParentTaskUpdate = Partial<Pick<ParentTaskPayload,
+  'title' | 'description' | 'points' | 'active_weekdays' | 'active'
+>>
+
+export interface ParentTask extends ParentTaskPayload {
+  id: number
+  assigned_parent_name: string
+  child_name: string
+}
+
+export interface ParentTaskCard {
+  task: ParentTask
+  period_key: string
+  status: 'todo' | 'pending' | 'done'
+  reminded: boolean
+}
+
+export interface ParentTaskSubmission {
+  id: number
+  task_id: number
+  task_title: string
+  child_id: number
+  assigned_parent_id: number
+  assigned_parent_name: string
+  points: number
+  note: string
+  period_key: string
+  submitted_at: string
+  confirmed_at: string | null
+}
+
 export interface Submission {
   id: number
   task_id: number
@@ -147,6 +189,7 @@ export interface Transaction {
   ref_id: number | null
   note: string
   created_at: string
+  contributor_name: string | null
 }
 
 export interface PointSummary {
@@ -242,6 +285,7 @@ export interface StatsBucket {
   label: string
   task_points: number
   bonus_points: number
+  parent_task_points: number
   redeemed_points: number
   adjusted_points: number
   net_points: number
@@ -256,6 +300,7 @@ export interface Stats {
   end_date: string
   task_points: number
   bonus_points: number
+  parent_task_points: number
   redeemed_points: number
   adjusted_points: number
   net_points: number
@@ -268,6 +313,13 @@ export interface Stats {
   redemption_points: number
   redemption_statuses: Record<string, number>
   buckets: StatsBucket[]
+  contributors: {
+    member_id: number
+    member_name: string
+    role: Role
+    points: number
+    completed_tasks: number
+  }[]
   has_data: boolean
 }
 
@@ -305,6 +357,8 @@ export interface ChildHome {
   streak_days: number
   badges: Badge[]
   today_tasks: TodayTask[]
+  parent_tasks: ParentTaskCard[]
+  parent_task_confirmations: ParentTaskSubmission[]
   goals: Goal[]
   long_term_rewards: Reward[]
   recent_transactions: Transaction[]
@@ -329,6 +383,7 @@ export interface ParentDashboard {
   pending_wish_count: number
   active_locks: SavingsLock[]
   today_tasks: TodayTask[]
+  parent_tasks: ParentTaskCard[]
 }
 
 export interface SetupPayload {

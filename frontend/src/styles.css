@@ -305,6 +305,11 @@ button.task-card:hover {
   box-shadow: var(--shadow);
 }
 
+.parent-task-control {
+  min-height: 44px;
+  min-width: 44px;
+}
+
 .task-card.done {
   background: rgba(227, 242, 239, 0.55);
 }
@@ -706,10 +711,13 @@ button.task-card:hover {
 }
 
 .parent-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 18px;
-  align-items: start;
+  margin-top: 18px;
+  column-count: 2;
+  column-gap: 18px;
+}
+
+.parent-grid > .panel {
+  break-inside: avoid;
 }
 
 .panel {
@@ -1551,6 +1559,12 @@ select.native-input option {
   gap: 9px;
 }
 
+.parent-task-management {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
 .manage-row {
   display: flex;
   flex-wrap: wrap;
@@ -2262,7 +2276,7 @@ select.native-input option {
   }
 
   .parent-grid {
-    grid-template-columns: 1fr;
+    column-count: 1;
   }
 }
 

@@ -11,6 +11,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -201,10 +202,87 @@ class Submission(Base):
     bonus_percent: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
+class ParentTask(Base):
+    __tablename__ = "parent_tasks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    family_id: Mapped[int] = mapped_column(
+        ForeignKey("families.id"), nullable=False, index=True
+    )
+    child_id: Mapped[int] = mapped_column(
+        ForeignKey("members.id"), nullable=False, index=True
+    )
+    assigned_parent_id: Mapped[int] = mapped_column(
+        ForeignKey("members.id"), nullable=False, index=True
+    )
+    title: Mapped[str] = mapped_column(String(100), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    points: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    task_type: Mapped[str] = mapped_column(
+        String(20), nullable=False, default=TASK_DAILY
+    )
+    active_weekdays: Mapped[str] = mapped_column(
+        String(20), nullable=False, default=ALL_WEEKDAYS
+    )
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+
+
+class ParentTaskSubmission(Base):
+    __tablename__ = "parent_task_submissions"
+    __table_args__ = (
+        UniqueConstraint("task_id", "period_key", name="uq_parent_task_submission_period"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("parent_tasks.id"), nullable=False)
+    child_id: Mapped[int] = mapped_column(
+        ForeignKey("members.id"), nullable=False, index=True
+    )
+    assigned_parent_id: Mapped[int] = mapped_column(
+        ForeignKey("members.id"), nullable=False
+    )
+    task_title: Mapped[str] = mapped_column(String(100), nullable=False)
+    points: Mapped[int] = mapped_column(Integer, nullable=False)
+    note: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    period_key: Mapped[str] = mapped_column(String(20), nullable=False)
+    submitted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+    confirmed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    confirmed_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("members.id"), nullable=True
+    )
+
+
+class ParentTaskReminder(Base):
+    __tablename__ = "parent_task_reminders"
+    __table_args__ = (
+        UniqueConstraint("task_id", "period_key", name="uq_parent_task_reminder_period"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("parent_tasks.id"), nullable=False)
+    period_key: Mapped[str] = mapped_column(String(20), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, nullable=False
+    )
+
+
 class PointTransaction(Base):
     __tablename__ = "point_transactions"
     __table_args__ = (
         Index("ix_point_transactions_child_created", "child_id", "created_at"),
+        Index(
+            "uq_point_transactions_parent_task_submission",
+            "ref_id",
+            unique=True,
+            sqlite_where=text("kind = 'parent_task' AND ref_type = 'parent_task_submission'"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

@@ -10,6 +10,10 @@ import type {
   MemberPayload,
   MemberPublic,
   ParentDashboard,
+  ParentTask,
+  ParentTaskPayload,
+  ParentTaskSubmission,
+  ParentTaskUpdate,
   PointSummary,
   Redemption,
   ReviewPayload,
@@ -137,6 +141,19 @@ export const api = {
     request<Task>('/tasks', { method: 'POST', json: payload }),
   updateTask: (id: number, payload: Partial<TaskPayload>) =>
     request<Task>(`/tasks/${id}`, { method: 'PATCH', json: payload }),
+
+  parentTasks: (childId?: number) =>
+    request<ParentTask[]>(`/parent-tasks${query({ child_id: childId })}`),
+  createParentTask: (payload: ParentTaskPayload) =>
+    request<ParentTask>('/parent-tasks', { method: 'POST', json: payload }),
+  updateParentTask: (id: number, payload: ParentTaskUpdate) =>
+    request<ParentTask>(`/parent-tasks/${id}`, { method: 'PATCH', json: payload }),
+  submitParentTask: (id: number, note: string) =>
+    request<ParentTaskSubmission>(`/parent-tasks/${id}/submissions`, { method: 'POST', json: { note } }),
+  remindParentTask: (id: number) =>
+    request<void>(`/parent-tasks/${id}/reminders`, { method: 'POST' }),
+  confirmParentTask: (id: number) =>
+    request<ParentTaskSubmission>(`/parent-task-submissions/${id}/confirmation`, { method: 'PATCH' }),
 
   submitTask: (taskId: number, note: string, photo?: File | null) => {
     const form = new FormData()

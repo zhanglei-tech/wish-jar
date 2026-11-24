@@ -31,6 +31,10 @@ const maxAbs = computed(() => {
   return Math.max(1, ...values)
 })
 
+function bucketDetails(bucket: Stats['buckets'][number]) {
+  return `${bucket.label}：任务 +${bucket.task_points}，连续 +${bucket.bonus_points}，家长任务 +${bucket.parent_task_points ?? 0}，兑换 -${bucket.redeemed_points}，调整 ${bucket.adjusted_points}`
+}
+
 const statusLabels: Record<string, string> = {
   pending: '待审核',
   approved: '已通过',
@@ -150,7 +154,7 @@ function exportCsv() {
           </span>
         </div>
 
-        <div class="stats-grid">
+        <div class="stats-grid stats-totals">
           <div class="stat-tile">
             <strong>+{{ stats.task_points }}</strong>
             <span>任务获得</span>
@@ -160,12 +164,35 @@ function exportCsv() {
             <span>连续奖励</span>
           </div>
           <div class="stat-tile">
+            <strong>+{{ stats.parent_task_points ?? 0 }}</strong>
+            <span>家长任务</span>
+          </div>
+          <div class="stat-tile">
             <strong>-{{ stats.redeemed_points }}</strong>
             <span>兑换扣除</span>
           </div>
           <div class="stat-tile">
             <strong>{{ stats.adjusted_points > 0 ? '+' : '' }}{{ stats.adjusted_points }}</strong>
             <span>家长调整</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="detail-card">
+        <div class="panel-head">
+          <div>
+            <h2>成员贡献</h2>
+            <p class="hint">按实际完成人汇总</p>
+          </div>
+        </div>
+        <p v-if="!stats.contributors?.length" class="muted">这个周期还没有任务贡献。</p>
+        <div v-else class="manage-list">
+          <div v-for="contributor in stats.contributors" :key="contributor.member_id" class="manage-row">
+            <div class="row-main">
+              <strong>{{ contributor.member_name }}</strong>
+              <span>{{ contributor.role === 'parent' ? '家长' : '孩子' }}</span>
+            </div>
+            <span>{{ contributor.points }} 积分 · {{ contributor.completed_tasks }} 次完成</span>
           </div>
         </div>
       </section>
@@ -190,7 +217,7 @@ function exportCsv() {
               v-for="bucket in stats.buckets"
               :key="bucket.label"
               class="chart-column"
-              :title="`${bucket.label}：任务 +${bucket.task_points}，连续 +${bucket.bonus_points}，兑换 -${bucket.redeemed_points}，调整 ${bucket.adjusted_points}`"
+              :title="bucketDetails(bucket)"
             >
               <span class="chart-value">{{ bucket.net_points }}</span>
               <div class="chart-space">
@@ -205,6 +232,12 @@ function exportCsv() {
               <span class="chart-label">{{ bucket.label }}</span>
             </div>
           </div>
+          <details class="trend-details">
+            <summary>按时段查看积分明细</summary>
+            <ul>
+              <li v-for="bucket in stats.buckets" :key="bucket.label">{{ bucketDetails(bucket) }}</li>
+            </ul>
+          </details>
         </section>
 
         <section class="detail-card">
@@ -258,3 +291,24 @@ function exportCsv() {
     <ChildNav v-if="!isParent" />
   </main>
 </template>
+
+<style scoped>
+.trend-details summary {
+  display: list-item;
+  align-content: center;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.trend-details ul {
+  margin-block: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+@media (min-width: 681px) {
+  .stats-totals {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+</style>

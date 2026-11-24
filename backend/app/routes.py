@@ -53,6 +53,8 @@ from .constants import (
     TASK_TYPES,
     WISH_PENDING,
 )
+from . import parent_tasks
+from .parent_task_routes import router as parent_task_router
 from .models import (
     ChildBadge,
     Family,
@@ -155,6 +157,7 @@ from .services import (
 )
 
 router = APIRouter(prefix="/api")
+router.include_router(parent_task_router)
 
 ALLOWED_PHOTO_TYPES = {
     "image/jpeg": "jpg",
@@ -1595,6 +1598,7 @@ def export_stats(
     writer.writerow([])
     writer.writerow(["任务获得", data.task_points])
     writer.writerow(["连续完成奖励", data.bonus_points])
+    writer.writerow(["家长贡献", data.parent_task_points])
     writer.writerow(["兑换扣除", data.redeemed_points])
     writer.writerow(["家长调整", data.adjusted_points])
     writer.writerow(["净变化", data.net_points])
@@ -1608,8 +1612,18 @@ def export_stats(
     writer.writerow(["兑换次数", data.redemption_count])
     writer.writerow(["兑换消耗积分", data.redemption_points])
     writer.writerow([])
+    writer.writerow(["贡献成员", "角色", "贡献积分", "完成次数"])
+    for contributor in data.contributors:
+        name = contributor.member_name
+        if name.lstrip().startswith(("=", "+", "-", "@")) or name.startswith(("\t", "\r", "\n")):
+            name = "'" + name
+        writer.writerow([
+            name, "家长" if contributor.role == ROLE_PARENT else "孩子",
+            contributor.points, contributor.completed_tasks,
+        ])
+    writer.writerow([])
     writer.writerow(
-        ["区间", "任务获得", "连续奖励", "兑换扣除", "家长调整", "净变化"]
+        ["区间", "任务获得", "连续奖励", "兑换扣除", "家长调整", "净变化", "家长贡献"]
     )
     for bucket in data.buckets:
         writer.writerow(
@@ -1620,6 +1634,7 @@ def export_stats(
                 bucket.redeemed_points,
                 bucket.adjusted_points,
                 bucket.net_points,
+                bucket.parent_task_points,
             ]
         )
     content = "﻿" + buffer.getvalue()
@@ -1644,7 +1659,10 @@ def child_home(
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ) -> ChildHome:
-    return build_child_home(db, current, settings)
+    home = build_child_home(db, current, settings)
+    home.parent_tasks = parent_tasks.current_cards(db, current, settings)
+    home.parent_task_confirmations = parent_tasks.pending_confirmations(db, current)
+    return home
 
 
 @router.get("/parent/dashboard", response_model=ParentDashboard)
@@ -1653,7 +1671,9 @@ def parent_dashboard(
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ) -> ParentDashboard:
-    return build_parent_dashboard(db, current, settings)
+    dashboard = build_parent_dashboard(db, current, settings)
+    dashboard.parent_tasks = parent_tasks.current_cards(db, current, settings)
+    return dashboard
 
 
 @router.post("/backup", response_model=BackupOut)

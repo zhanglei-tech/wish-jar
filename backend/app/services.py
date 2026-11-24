@@ -1,5 +1,7 @@
 import math
 import shutil
+from collections import Counter
+from collections.abc import Sequence
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -44,6 +46,8 @@ from .models import (
     GoalStage,
     LevelThreshold,
     Member,
+    ParentTask,
+    ParentTaskSubmission,
     PointTransaction,
     Redemption,
     Reward,
@@ -66,6 +70,7 @@ from .schemas import (
     RewardOut,
     SavingsLockOut,
     StatsBucket,
+    StatsContributor,
     StatsOut,
     StatsTaskRate,
     SubmissionOut,
@@ -151,7 +156,7 @@ def get_family_name(db: Session, family_id: int) -> str:
     return family.name if family else ""
 
 
-def serialize_transaction(transaction: PointTransaction) -> TransactionOut:
+def serialize_transaction(transaction: PointTransaction, contributor_name: str | None = None) -> TransactionOut:
     return TransactionOut(
         id=transaction.id,
         delta=transaction.delta,
@@ -160,7 +165,47 @@ def serialize_transaction(transaction: PointTransaction) -> TransactionOut:
         ref_id=transaction.ref_id,
         note=transaction.note,
         created_at=transaction.created_at,
+        contributor_name=contributor_name,
     )
+
+
+def _parent_credit_owners(
+    db: Session, child: Member, transactions: Sequence[PointTransaction]
+) -> dict[int, Member]:
+    refs = {
+        row.ref_id for row in transactions
+        if row.kind == "parent_task" and row.ref_type == "parent_task_submission" and row.ref_id is not None
+    }
+    if not refs:
+        return {}
+    rows = db.execute(
+        select(ParentTaskSubmission.id, Member)
+        .join(ParentTask, ParentTask.id == ParentTaskSubmission.task_id)
+        .join(Member, Member.id == ParentTaskSubmission.assigned_parent_id)
+        .where(
+            ParentTask.family_id == child.family_id,
+            ParentTaskSubmission.child_id == child.id,
+            Member.family_id == child.family_id, Member.role == ROLE_PARENT,
+            ParentTaskSubmission.id.in_(refs),
+        )
+    )
+    return {submission_id: member for submission_id, member in rows}
+
+
+def _serialize_transactions(
+    db: Session, child: Member, transactions: Sequence[PointTransaction]
+) -> list[TransactionOut]:
+    owners = _parent_credit_owners(db, child, transactions)
+    result = []
+    for row in transactions:
+        contributor_name = None
+        if row.kind in ("task", "streak_bonus"):
+            contributor_name = child.name
+        elif row.kind == "parent_task" and row.ref_id is not None:
+            owner = owners.get(row.ref_id)
+            contributor_name = owner.name if owner else None
+        result.append(serialize_transaction(row, contributor_name))
+    return result
 
 
 def serialize_lock(db: Session, lock: SavingsLock) -> SavingsLockOut:
@@ -722,7 +767,7 @@ def get_week_earned(db: Session, child_id: int, settings: Settings) -> int:
         db.scalar(
             select(func.coalesce(func.sum(PointTransaction.delta), 0)).where(
                 PointTransaction.child_id == child_id,
-                PointTransaction.kind.in_(("task", "streak_bonus")),
+                PointTransaction.kind.in_(("task", "streak_bonus", "parent_task")),
                 PointTransaction.delta > 0,
                 PointTransaction.created_at >= start,
             )
@@ -918,6 +963,7 @@ def _create_transaction(
     note: str,
     ref_type: str | None = None,
     ref_id: int | None = None,
+    created_at: datetime | None = None,
 ) -> PointTransaction:
     transaction = PointTransaction(
         family_id=family_id,
@@ -927,6 +973,7 @@ def _create_transaction(
         note=note,
         ref_type=ref_type,
         ref_id=ref_id,
+        created_at=created_at if created_at is not None else utcnow(),
     )
     db.add(transaction)
     return transaction
@@ -1513,6 +1560,51 @@ def _task_expected_count(
     return days
 
 
+def _build_contributions(
+    db: Session, child: Member, transactions: Sequence[PointTransaction],
+    start_utc: datetime, end_utc: datetime,
+) -> list[StatsContributor]:
+    owners = _parent_credit_owners(db, child, transactions)
+    points: Counter[int] = Counter()
+    names = {child.id: child.name}
+    for row in transactions:
+        if row.kind in ("task", "streak_bonus"):
+            points[child.id] += row.delta
+        elif row.kind == "parent_task" and row.ref_id in owners:
+            owner = owners[row.ref_id]
+            names[owner.id] = owner.name
+            points[owner.id] += row.delta
+
+    approved_at = func.coalesce(Submission.reviewed_at, Submission.submitted_at)
+    completed: Counter[int] = Counter()
+    completed[child.id] = db.scalar(select(func.count(Submission.id)).where(
+        Submission.child_id == child.id, Submission.status == SUBMISSION_APPROVED,
+        approved_at >= start_utc, approved_at < end_utc,
+    )) or 0
+    parent_rows = db.execute(
+        select(Member.id, Member.name, func.count(ParentTaskSubmission.id))
+        .join(ParentTaskSubmission, ParentTaskSubmission.assigned_parent_id == Member.id)
+        .join(ParentTask, ParentTask.id == ParentTaskSubmission.task_id)
+        .where(
+            ParentTask.family_id == child.family_id, ParentTaskSubmission.child_id == child.id,
+            Member.family_id == child.family_id, Member.role == ROLE_PARENT,
+            ParentTaskSubmission.confirmed_at >= start_utc, ParentTaskSubmission.confirmed_at < end_utc,
+        ).group_by(Member.id, Member.name)
+    )
+    for member_id, name, count in parent_rows:
+        names[member_id] = name
+        completed[member_id] = count
+    return [
+        StatsContributor(
+            member_id=member_id, member_name=names[member_id],
+            role="child" if member_id == child.id else "parent",
+            points=points[member_id], completed_tasks=completed[member_id],
+        )
+        for member_id in sorted(names, key=lambda value: (value != child.id, value))
+        if points[member_id] or completed[member_id]
+    ]
+
+
 def build_stats(
     db: Session,
     child: Member,
@@ -1561,6 +1653,7 @@ def build_stats(
             StatsBucket(
                 label=bucket_label,
                 task_points=sum(row.delta for row in rows if row.kind == "task"),
+                parent_task_points=sum(row.delta for row in rows if row.kind == "parent_task"),
                 bonus_points=sum(
                     row.delta for row in rows if row.kind == "streak_bonus"
                 ),
@@ -1608,6 +1701,7 @@ def build_stats(
         for redemption in redemptions
         if redemption.status in (REDEMPTION_APPROVED, REDEMPTION_FULFILLED)
     )
+    contributors = _build_contributions(db, child, transactions, start_utc, end_utc)
     return StatsOut(
         child_id=child.id,
         child_name=child.name,
@@ -1616,7 +1710,9 @@ def build_stats(
         start_date=start,
         end_date=end,
         task_points=task_points,
+        parent_task_points=sum(row.delta for row in transactions if row.kind == "parent_task"),
         bonus_points=bonus_points,
+        contributors=contributors,
         redeemed_points=redeemed_points,
         adjusted_points=adjusted_points,
         net_points=net_points,
@@ -1627,7 +1723,7 @@ def build_stats(
         redemption_points=redemption_points,
         redemption_statuses=statuses,
         buckets=buckets,
-        has_data=bool(transactions or approved or redemptions),
+        has_data=bool(transactions or approved or redemptions or contributors),
     )
 
 
@@ -1740,9 +1836,7 @@ def build_child_home(
             )
             for reward in long_term_rewards
         ],
-        recent_transactions=[
-            serialize_transaction(transaction) for transaction in transactions
-        ],
+        recent_transactions=_serialize_transactions(db, child, transactions),
         recent_redemptions=[
             serialize_redemption(db, redemption) for redemption in redemptions
         ],
@@ -1884,7 +1978,7 @@ def build_point_summary(
         badges=[
             serialize_badge(db, badge) for badge in get_badges(db, child.id)
         ],
-        transactions=[serialize_transaction(row) for row in transactions],
+        transactions=_serialize_transactions(db, child, transactions),
     )
 
 

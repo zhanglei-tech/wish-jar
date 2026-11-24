@@ -271,6 +271,64 @@ class SubmissionOut(BaseModel):
     bonus_percent: int
 
 
+ParentTaskTitle = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
+ParentTaskWeekdays = Annotated[list[Annotated[int, Field(ge=1, le=7)]], Field(min_length=1, max_length=7)]
+
+
+class ParentTaskCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    child_id: int
+    assigned_parent_id: int
+    title: ParentTaskTitle
+    description: str = Field(default="", max_length=1000)
+    points: int = Field(default=0, ge=0, le=1000)
+    task_type: TaskType = "daily"
+    active_weekdays: ParentTaskWeekdays = Field(default_factory=lambda: list(range(1, 8)))
+    active: bool = True
+
+
+class ParentTaskUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: ParentTaskTitle | None = None
+    description: str | None = Field(default=None, max_length=1000)
+    points: int | None = Field(default=None, ge=0, le=1000)
+    active_weekdays: ParentTaskWeekdays | None = None
+    active: bool | None = None
+
+
+class ParentTaskOut(ParentTaskCreate):
+    id: int
+    child_name: str
+    assigned_parent_name: str
+
+
+class ParentTaskCard(BaseModel):
+    task: ParentTaskOut
+    period_key: str
+    status: Literal["todo", "pending", "done"]
+    reminded: bool
+
+
+class ParentTaskSubmissionCreate(BaseModel):
+    note: str = Field(default="", max_length=200)
+
+
+class ParentTaskSubmissionOut(BaseModel):
+    id: int
+    task_id: int
+    task_title: str
+    child_id: int
+    assigned_parent_id: int
+    assigned_parent_name: str
+    points: int
+    note: str
+    period_key: str
+    submitted_at: datetime
+    confirmed_at: datetime | None
+
+
 class ReviewRequest(BaseModel):
     approve: bool
     note: str = Field(default="", max_length=500)
@@ -289,6 +347,7 @@ class TransactionOut(BaseModel):
     ref_id: int | None
     note: str
     created_at: datetime
+    contributor_name: str | None = None
 
 
 class BadgeOut(BaseModel):
@@ -523,6 +582,7 @@ class WishListRequest(BaseModel):
 class StatsBucket(BaseModel):
     label: str
     task_points: int = 0
+    parent_task_points: int = 0
     bonus_points: int = 0
     redeemed_points: int = 0
     adjusted_points: int = 0
@@ -535,6 +595,14 @@ class StatsTaskRate(BaseModel):
     percent: int
 
 
+class StatsContributor(BaseModel):
+    member_id: int
+    member_name: str
+    role: Literal["parent", "child"]
+    points: int
+    completed_tasks: int
+
+
 class StatsOut(BaseModel):
     child_id: int
     child_name: str
@@ -543,10 +611,12 @@ class StatsOut(BaseModel):
     start_date: date
     end_date: date
     task_points: int
+    parent_task_points: int
     bonus_points: int
     redeemed_points: int
     adjusted_points: int
     net_points: int
+    contributors: list[StatsContributor]
     task_completion: StatsTaskRate
     redemption_count: int
     redemption_points: int
@@ -573,10 +643,12 @@ class ChildHome(BaseModel):
     streak_days: int
     badges: list[BadgeOut]
     today_tasks: list[TodayTaskOut]
+    parent_tasks: list[ParentTaskCard] = Field(default_factory=list)
     goals: list[GoalOut]
     long_term_rewards: list[RewardOut]
     recent_transactions: list[TransactionOut]
     recent_redemptions: list[RedemptionOut]
+    parent_task_confirmations: list[ParentTaskSubmissionOut] = Field(default_factory=list)
 
 
 class ChildSummary(BaseModel):
@@ -597,6 +669,7 @@ class ParentDashboard(BaseModel):
     pending_wish_count: int
     active_locks: list[SavingsLockOut]
     today_tasks: list[TodayTaskOut]
+    parent_tasks: list[ParentTaskCard] = Field(default_factory=list)
 
 
 class BackupOut(BaseModel):

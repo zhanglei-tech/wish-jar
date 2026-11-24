@@ -33,8 +33,8 @@ def to_local(value: datetime, settings: Settings) -> datetime:
     return as_utc(value).astimezone(get_tz(settings))
 
 
-def period_key(task_type: str, settings: Settings) -> str:
-    now = local_now(settings)
+def period_key(task_type: str, settings: Settings, at: datetime | None = None) -> str:
+    now = to_local(at, settings) if at is not None else local_now(settings)
     if task_type == "daily":
         return now.date().isoformat()
     if task_type == "weekly":

@@ -14,6 +14,7 @@ import ParentNav from '../components/ParentNav.vue'
 import TaskSubmitModal from '../components/TaskSubmitModal.vue'
 import type {
   ParentDashboard,
+  ParentTaskCard,
   Redemption,
   SavingsLock,
   Submission,
@@ -44,6 +45,38 @@ const quickOpen = ref(false)
 const quickTask = ref<TodayTask | null>(null)
 const quickBusy = ref(false)
 const quickLoggingId = ref<number | null>(null)
+
+const parentTaskOpen = ref(false)
+const parentTaskTarget = ref<ParentTaskCard | null>(null)
+const parentTaskNote = ref('')
+const parentTaskBusy = ref(false)
+
+function openParentTask(card: ParentTaskCard) {
+  if (card.status !== 'todo' || parentTaskBusy.value) return
+  parentTaskTarget.value = card
+  parentTaskNote.value = ''
+  parentTaskOpen.value = true
+}
+
+async function submitParentTask() {
+  const card = parentTaskTarget.value
+  if (!card || card.status !== 'todo' || parentTaskBusy.value) return
+  parentTaskBusy.value = true
+  try {
+    const submission = await api.submitParentTask(card.task.id, parentTaskNote.value.trim())
+    if (card.period_key === submission.period_key) {
+      card.status = submission.confirmed_at === null ? 'pending' : 'done'
+      card.reminded = false
+    }
+    parentTaskOpen.value = false
+    message.success(`已提交，等待 ${card.task.child_name} 确认`)
+    await load()
+  } catch (err) {
+    message.error(err instanceof Error ? err.message : '提交失败，请再试一次')
+  } finally {
+    parentTaskBusy.value = false
+  }
+}
 
 const adjustChildId = ref<number | null>(null)
 const adjustDelta = ref<number | null>(null)
@@ -302,251 +335,284 @@ async function adjustPoints() {
         </div>
       </section>
 
-      <div class="parent-grid" style="margin-top: 18px">
-        <div>
-          <section class="panel">
-            <div class="panel-head">
-              <div>
-                <h2>待审核提交</h2>
-                <p class="hint">孩子完成的任务</p>
-              </div>
-              <span class="pill amber">{{ dashboard.pending_submissions.length }}</span>
+      <div class="parent-grid">
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>待审核提交</h2>
+              <p class="hint">孩子完成的任务</p>
             </div>
-            <div v-if="dashboard.pending_submissions.length === 0">
-              <EmptyState emoji="✅" title="没有待审核的提交" />
-            </div>
-            <div v-else class="review-list">
-              <article
-                v-for="submission in dashboard.pending_submissions"
-                :key="submission.id"
-                class="review-card"
-              >
-                <h3>{{ submission.task_title }}</h3>
-                <p>
-                  {{ submission.child_name }} ·
-                  {{ formatDateTime(submission.submitted_at) }}
-                </p>
-                <p v-if="submission.note">“{{ submission.note }}”</p>
-                <img
-                  v-if="submission.photo_url"
-                  :src="submission.photo_url"
-                  class="review-photo"
-                  alt="任务照片"
-                />
-                <div class="review-actions">
-                  <n-button
-                    size="small"
-                    type="primary"
-                    secondary
-                    @click="openReview('submission', submission, true)"
-                  >
-                    通过
-                  </n-button>
-                  <n-button
-                    size="small"
-                    tertiary
-                    @click="openReview('submission', submission, false)"
-                  >
-                    驳回
-                  </n-button>
-                </div>
-              </article>
-            </div>
-          </section>
-
-          <section class="panel">
-            <div class="panel-head">
-              <div>
-                <h2>待审核兑换</h2>
-                <p class="hint">通过时会扣积分和库存</p>
-              </div>
-              <span class="pill teal">{{ dashboard.pending_redemptions.length }}</span>
-            </div>
-            <div v-if="dashboard.pending_redemptions.length === 0">
-              <EmptyState emoji="🎁" title="没有待审核的兑换" />
-            </div>
-            <div v-else class="review-list">
-              <article
-                v-for="redemption in dashboard.pending_redemptions"
-                :key="redemption.id"
-                class="review-card redemption"
-              >
-                <h3>{{ redemption.reward_emoji }} {{ redemption.reward_title }}</h3>
-                <p>
-                  {{ redemption.child_name }} · {{ redemption.cost_points }} 积分 ·
-                  {{ formatDateTime(redemption.requested_at) }}
-                </p>
-                <div class="review-actions">
-                  <n-button
-                    size="small"
-                    type="primary"
-                    secondary
-                    @click="openReview('redemption', redemption, true)"
-                  >
-                    通过
-                  </n-button>
-                  <n-button
-                    size="small"
-                    tertiary
-                    @click="openReview('redemption', redemption, false)"
-                  >
-                    驳回
-                  </n-button>
-                </div>
-              </article>
-            </div>
-          </section>
-
-          <section class="panel">
-            <div class="panel-head">
-              <div>
-                <h2>待线下兑现</h2>
-                <p class="hint">已经扣分，等待把奖励给孩子</p>
-              </div>
-              <span class="pill">{{ dashboard.unfulfilled_redemptions.length }}</span>
-            </div>
-            <div v-if="dashboard.unfulfilled_redemptions.length === 0">
-              <EmptyState emoji="📦" title="没有待兑现的奖励" />
-            </div>
-            <div v-else class="review-list">
-              <article
-                v-for="redemption in dashboard.unfulfilled_redemptions"
-                :key="redemption.id"
-                class="review-card redemption"
-              >
-                <h3>{{ redemption.reward_emoji }} {{ redemption.reward_title }}</h3>
-                <p>{{ redemption.child_name }} · {{ redemption.cost_points }} 积分</p>
-                <div class="review-actions">
-                  <n-button size="small" type="primary" @click="fulfill(redemption)">
-                    标记已兑现
-                  </n-button>
-                </div>
-              </article>
-            </div>
-          </section>
-        </div>
-
-        <div>
-          <section class="panel">
-            <div class="panel-head">
-              <div>
-                <h2>今日任务 · 快速代记</h2>
-                <p class="hint">点一下就能记分，家长代记立即通过</p>
-              </div>
-            </div>
-            <div v-if="dashboard.today_tasks.length === 0">
-              <EmptyState emoji="🌤️" title="今天没有安排任务" />
-            </div>
-            <div v-else class="quick-grid">
-              <div
-                v-for="task in dashboard.today_tasks"
-                :key="task.id"
-                class="quick-card"
-              >
-                <div>
-                  <strong>{{ task.title }}</strong>
-                  <span>
-                    {{ task.child_name }} · +{{ task.points }} ·
-                    {{ taskTypeLabel(task.task_type) }} · {{ taskStatus(task) }}
-                  </span>
-                </div>
+            <span class="pill amber">{{ dashboard.pending_submissions.length }}</span>
+          </div>
+          <div v-if="dashboard.pending_submissions.length === 0">
+            <EmptyState emoji="✅" title="没有待审核的提交" />
+          </div>
+          <div v-else class="review-list">
+            <article
+              v-for="submission in dashboard.pending_submissions"
+              :key="submission.id"
+              class="review-card"
+            >
+              <h3>{{ submission.task_title }}</h3>
+              <p>
+                {{ submission.child_name }} ·
+                {{ formatDateTime(submission.submitted_at) }}
+              </p>
+              <p v-if="submission.note">“{{ submission.note }}”</p>
+              <img
+                v-if="submission.photo_url"
+                :src="submission.photo_url"
+                class="review-photo"
+                alt="任务照片"
+              />
+              <div class="review-actions">
                 <n-button
-                  v-if="task.status === 'todo' || task.status === 'rejected'"
                   size="small"
                   type="primary"
                   secondary
-                  :loading="quickLoggingId === task.id"
-                  @click="quickLog(task)"
+                  @click="openReview('submission', submission, true)"
                 >
-                  代记
+                  通过
                 </n-button>
-                <span v-else class="pill" :class="task.status === 'done' ? 'teal' : 'amber'">
-                  {{ taskStatus(task) }}
+                <n-button
+                  size="small"
+                  tertiary
+                  @click="openReview('submission', submission, false)"
+                >
+                  驳回
+                </n-button>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>待审核兑换</h2>
+              <p class="hint">通过时会扣积分和库存</p>
+            </div>
+            <span class="pill teal">{{ dashboard.pending_redemptions.length }}</span>
+          </div>
+          <div v-if="dashboard.pending_redemptions.length === 0">
+            <EmptyState emoji="🎁" title="没有待审核的兑换" />
+          </div>
+          <div v-else class="review-list">
+            <article
+              v-for="redemption in dashboard.pending_redemptions"
+              :key="redemption.id"
+              class="review-card redemption"
+            >
+              <h3>{{ redemption.reward_emoji }} {{ redemption.reward_title }}</h3>
+              <p>
+                {{ redemption.child_name }} · {{ redemption.cost_points }} 积分 ·
+                {{ formatDateTime(redemption.requested_at) }}
+              </p>
+              <div class="review-actions">
+                <n-button
+                  size="small"
+                  type="primary"
+                  secondary
+                  @click="openReview('redemption', redemption, true)"
+                >
+                  通过
+                </n-button>
+                <n-button
+                  size="small"
+                  tertiary
+                  @click="openReview('redemption', redemption, false)"
+                >
+                  驳回
+                </n-button>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>待线下兑现</h2>
+              <p class="hint">已经扣分，等待把奖励给孩子</p>
+            </div>
+            <span class="pill">{{ dashboard.unfulfilled_redemptions.length }}</span>
+          </div>
+          <div v-if="dashboard.unfulfilled_redemptions.length === 0">
+            <EmptyState emoji="📦" title="没有待兑现的奖励" />
+          </div>
+          <div v-else class="review-list">
+            <article
+              v-for="redemption in dashboard.unfulfilled_redemptions"
+              :key="redemption.id"
+              class="review-card redemption"
+            >
+              <h3>{{ redemption.reward_emoji }} {{ redemption.reward_title }}</h3>
+              <p>{{ redemption.child_name }} · {{ redemption.cost_points }} 积分</p>
+              <div class="review-actions">
+                <n-button size="small" type="primary" @click="fulfill(redemption)">
+                  标记已兑现
+                </n-button>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>我的家长任务</h2>
+              <p class="hint">孩子确认后积分入账</p>
+            </div>
+          </div>
+          <p v-if="!dashboard.parent_tasks?.length" class="muted">当前没有分配给你的家长任务。</p>
+          <div v-else class="review-list">
+            <article
+              v-for="card in dashboard.parent_tasks"
+              :key="`${card.task.id}:${card.period_key}`"
+              class="review-card"
+            >
+              <h3>{{ card.task.title }}</h3>
+              <p v-if="card.task.description">{{ card.task.description }}</p>
+              <p>
+                {{ card.task.child_name }} · {{ taskTypeLabel(card.task.task_type) }}
+                <template v-if="card.status === 'todo'"> · +{{ card.task.points }} 积分</template>
+              </p>
+              <div class="review-actions">
+                <span v-if="card.status === 'todo' && card.reminded" class="pill amber">孩子已提醒</span>
+                <n-button
+                  v-if="card.status === 'todo'"
+                  class="parent-task-control"
+                  type="primary"
+                  secondary
+                  @click="openParentTask(card)"
+                >提交给孩子确认</n-button>
+                <span v-else class="pill" :class="card.status === 'done' ? 'teal' : 'amber'">
+                  {{ card.status === 'done' ? '已确认' : '待孩子确认' }}
                 </span>
               </div>
-            </div>
-          </section>
+            </article>
+          </div>
+        </section>
 
-          <section class="panel">
-            <div class="panel-head">
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>今日任务 · 快速代记</h2>
+              <p class="hint">点一下就能记分，家长代记立即通过</p>
+            </div>
+          </div>
+          <div v-if="dashboard.today_tasks.length === 0">
+            <EmptyState emoji="🌤️" title="今天没有安排任务" />
+          </div>
+          <div v-else class="quick-grid">
+            <div
+              v-for="task in dashboard.today_tasks"
+              :key="task.id"
+              class="quick-card"
+            >
               <div>
-                <h2>心愿锁定</h2>
-                <p class="hint">只有家长可以释放</p>
+                <strong>{{ task.title }}</strong>
+                <span>
+                  {{ task.child_name }} · +{{ task.points }} ·
+                  {{ taskTypeLabel(task.task_type) }} · {{ taskStatus(task) }}
+                </span>
               </div>
-              <span class="pill teal">{{ dashboard.active_locks.length }}</span>
-            </div>
-            <div v-if="dashboard.active_locks.length === 0">
-              <EmptyState emoji="🔒" title="还没有锁定储蓄" />
-            </div>
-            <div v-else class="review-list">
-              <article
-                v-for="lock in dashboard.active_locks"
-                :key="lock.id"
-                class="review-card redemption"
+              <n-button
+                v-if="task.status === 'todo' || task.status === 'rejected'"
+                size="small"
+                type="primary"
+                secondary
+                :loading="quickLoggingId === task.id"
+                @click="quickLog(task)"
               >
-                <h3>{{ lock.reward_title }}</h3>
-                <p>
-                  {{ lock.child_name }} · 锁定 {{ lock.amount }} 积分 ·
-                  {{ formatDate(lock.created_at) }}
-                </p>
-                <p class="muted" style="font-size: 11px">
-                  {{ lockStatusLabel(lock.status) }} · {{ lock.note || '为长期心愿储蓄' }}
-                </p>
-                <div class="review-actions">
-                  <n-button size="small" tertiary @click="releaseLock(lock)">
-                    释放锁定
-                  </n-button>
-                </div>
-              </article>
-            </div>
-          </section>
-
-          <section class="panel">
-            <div class="panel-head">
-              <div>
-                <h2>手动调整积分</h2>
-                <p class="hint">备注必填；调整后不能低于已锁定积分</p>
-              </div>
-            </div>
-            <div v-if="dashboard.children.length === 0">
-              <EmptyState emoji="🌱" title="还没有孩子账号" />
-            </div>
-            <div v-else class="modal-form">
-              <div class="field">
-                <label>孩子</label>
-                <select v-model="adjustChildId" class="native-input">
-                  <option
-                    v-for="child in dashboard.children"
-                    :key="child.member.id"
-                    :value="child.member.id"
-                  >
-                    {{ child.member.avatar }} {{ child.member.name }}
-                  </option>
-                </select>
-              </div>
-              <div class="field">
-                <label>调整积分（正数增加，负数扣减）</label>
-                <input
-                  v-model.number="adjustDelta"
-                  type="number"
-                  class="native-input"
-                  placeholder="例如：10 或 -5"
-                />
-              </div>
-              <div class="field">
-                <label>备注</label>
-                <n-input
-                  v-model:value="adjustNote"
-                  maxlength="200"
-                  placeholder="例如：主动帮忙做家务"
-                />
-              </div>
-              <n-button type="primary" :loading="adjusting" @click="adjustPoints">
-                确认调整
+                代记
               </n-button>
+              <span v-else class="pill" :class="task.status === 'done' ? 'teal' : 'amber'">
+                {{ taskStatus(task) }}
+              </span>
             </div>
-          </section>
-        </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>心愿锁定</h2>
+              <p class="hint">只有家长可以释放</p>
+            </div>
+            <span class="pill teal">{{ dashboard.active_locks.length }}</span>
+          </div>
+          <div v-if="dashboard.active_locks.length === 0">
+            <EmptyState emoji="🔒" title="还没有锁定储蓄" />
+          </div>
+          <div v-else class="review-list">
+            <article
+              v-for="lock in dashboard.active_locks"
+              :key="lock.id"
+              class="review-card redemption"
+            >
+              <h3>{{ lock.reward_title }}</h3>
+              <p>
+                {{ lock.child_name }} · 锁定 {{ lock.amount }} 积分 ·
+                {{ formatDate(lock.created_at) }}
+              </p>
+              <p class="muted" style="font-size: 11px">
+                {{ lockStatusLabel(lock.status) }} · {{ lock.note || '为长期心愿储蓄' }}
+              </p>
+              <div class="review-actions">
+                <n-button size="small" tertiary @click="releaseLock(lock)">
+                  释放锁定
+                </n-button>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>手动调整积分</h2>
+              <p class="hint">备注必填；调整后不能低于已锁定积分</p>
+            </div>
+          </div>
+          <div v-if="dashboard.children.length === 0">
+            <EmptyState emoji="🌱" title="还没有孩子账号" />
+          </div>
+          <div v-else class="modal-form">
+            <div class="field">
+              <label>孩子</label>
+              <select v-model="adjustChildId" class="native-input">
+                <option
+                  v-for="child in dashboard.children"
+                  :key="child.member.id"
+                  :value="child.member.id"
+                >
+                  {{ child.member.avatar }} {{ child.member.name }}
+                </option>
+              </select>
+            </div>
+            <div class="field">
+              <label>调整积分（正数增加，负数扣减）</label>
+              <input
+                v-model.number="adjustDelta"
+                type="number"
+                class="native-input"
+                placeholder="例如：10 或 -5"
+              />
+            </div>
+            <div class="field">
+              <label>备注</label>
+              <n-input
+                v-model:value="adjustNote"
+                maxlength="200"
+                placeholder="例如：主动帮忙做家务"
+              />
+            </div>
+            <n-button type="primary" :loading="adjusting" @click="adjustPoints">
+              确认调整
+            </n-button>
+          </div>
+        </section>
       </div>
     </template>
 
@@ -556,6 +622,39 @@ async function adjustPoints() {
       :busy="quickBusy"
       @submit="submitQuick"
     />
+
+    <n-modal
+      v-model:show="parentTaskOpen"
+      preset="card"
+      :style="{ width: 'min(500px, 92vw)' }"
+      title="提交家长任务"
+      :mask-closable="!parentTaskBusy"
+      :close-on-esc="!parentTaskBusy"
+      :closable="false"
+    >
+      <div v-if="parentTaskTarget" class="modal-form">
+        <p><strong>{{ parentTaskTarget.task.title }}</strong></p>
+        <p class="muted">{{ parentTaskTarget.task.child_name }} 确认后获得 {{ parentTaskTarget.task.points }} 积分。</p>
+        <div class="field">
+          <label for="parent-task-note">备注（可选）</label>
+          <n-input
+            v-model:value="parentTaskNote"
+            :input-props="{ id: 'parent-task-note' }"
+            type="textarea"
+            :autosize="{ minRows: 2, maxRows: 4 }"
+            maxlength="200"
+          />
+        </div>
+      </div>
+      <template #footer>
+        <div class="modal-footer">
+          <n-button class="parent-task-control" :disabled="parentTaskBusy" @click="parentTaskOpen = false">取消</n-button>
+          <n-button class="parent-task-control" type="primary" :loading="parentTaskBusy" @click="submitParentTask">
+            提交给孩子确认
+          </n-button>
+        </div>
+      </template>
+    </n-modal>
 
     <n-modal
       v-model:show="reviewOpen"

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { NSpin, useMessage } from 'naive-ui'
+import { NButton, NSpin, useMessage } from 'naive-ui'
 import { useRouter } from 'vue-router'
 import { api } from '../api'
 import ChildNav from '../components/ChildNav.vue'
@@ -9,12 +9,13 @@ import LevelBadge from '../components/LevelBadge.vue'
 import TaskSubmitModal from '../components/TaskSubmitModal.vue'
 import { levelBadgeName } from '../levels'
 import WishJar from '../components/WishJar.vue'
-import type { ChildHome, TodayTask } from '../types'
+import type { ChildHome, ParentTaskCard, ParentTaskSubmission, TodayTask } from '../types'
 import {
   formatDateTime,
   greeting,
   taskTypeLabel,
   todayLabel,
+  transactionKindLabel,
 } from '../utils'
 
 const router = useRouter()
@@ -26,6 +27,59 @@ const error = ref('')
 const submitting = ref(false)
 const showSubmit = ref(false)
 const activeTask = ref<TodayTask | null>(null)
+const remindingTaskId = ref<number | null>(null)
+const confirmingSubmissionId = ref<number | null>(null)
+const parentTaskActionBusy = computed(() => remindingTaskId.value !== null || confirmingSubmissionId.value !== null)
+
+function parentTaskPeriodKey(taskId: number, periodKey: string) {
+  return `${taskId}:${periodKey}`
+}
+
+const parentTaskRows = computed(() => {
+  const currentCards = home.value?.parent_tasks ?? []
+  const confirmations = home.value?.parent_task_confirmations ?? []
+  const cardsByPeriod = new Map(currentCards.map((card) => [
+    parentTaskPeriodKey(card.task.id, card.period_key), card,
+  ]))
+  const pendingRows = confirmations.map((submission) => {
+    const key = parentTaskPeriodKey(submission.task_id, submission.period_key)
+    const card = cardsByPeriod.get(key) ?? null
+    cardsByPeriod.delete(key)
+    return { key, card, submission }
+  })
+  return [
+    ...pendingRows,
+    ...Array.from(cardsByPeriod, ([key, card]) => ({ key, card, submission: null })),
+  ]
+})
+
+async function remindParentTask(card: ParentTaskCard) {
+  if (parentTaskActionBusy.value || card.status !== 'todo' || card.reminded) return
+  remindingTaskId.value = card.task.id
+  try {
+    await api.remindParentTask(card.task.id)
+    card.reminded = true
+    message.success(`已提醒 ${card.task.assigned_parent_name}`)
+  } catch (err) {
+    message.error(err instanceof Error ? err.message : '提醒失败，请再试一次')
+  } finally {
+    remindingTaskId.value = null
+  }
+}
+
+async function confirmParentTask(submission: ParentTaskSubmission) {
+  if (parentTaskActionBusy.value || submission.confirmed_at !== null) return
+  confirmingSubmissionId.value = submission.id
+  try {
+    const confirmed = await api.confirmParentTask(submission.id)
+    message.success(confirmed.points > 0 ? `已确认，获得 ${confirmed.points} 积分` : '家长任务已确认')
+    await load()
+  } catch (err) {
+    message.error(err instanceof Error ? err.message : '确认失败，请再试一次')
+  } finally {
+    confirmingSubmissionId.value = null
+  }
+}
 
 const doneCount = computed(
   () => home.value?.today_tasks.filter((task) => task.status === 'done').length ?? 0,
@@ -195,6 +249,61 @@ async function submit(note: string, photo: File | null) {
       </div>
     </section>
 
+    <section class="section" aria-labelledby="parent-tasks-heading">
+      <div class="section-heading">
+        <h2 id="parent-tasks-heading">家长任务</h2>
+        <span v-if="home.parent_task_confirmations?.length" class="muted">
+          {{ home.parent_task_confirmations.length }} 项待确认
+        </span>
+      </div>
+      <p v-if="!parentTaskRows.length" class="muted">当前没有家长任务。</p>
+      <div v-else class="task-list">
+        <article
+          v-for="{ key, card, submission } in parentTaskRows"
+          :key="key"
+          class="goal-card parent-task-entry"
+        >
+          <div class="goal-top">
+            <h3 class="goal-title">{{ submission?.task_title ?? card?.task.title }}</h3>
+            <span v-if="submission || card?.status === 'todo'" class="points">
+              +{{ submission?.points ?? card?.task.points }} 积分
+            </span>
+          </div>
+          <p v-if="submission?.note || card?.task.description" class="goal-description">
+            {{ submission?.note || card?.task.description }}
+          </p>
+          <div class="parent-task-row">
+            <template v-if="submission">
+              <span class="muted">
+                {{ submission.assigned_parent_name }} · <time :datetime="submission.submitted_at">{{ formatDateTime(submission.submitted_at) }}</time> 提交
+              </span>
+              <n-button
+                class="parent-task-control"
+                type="primary"
+                :loading="confirmingSubmissionId === submission.id"
+                :disabled="parentTaskActionBusy"
+                @click="confirmParentTask(submission)"
+              >确认完成</n-button>
+            </template>
+            <template v-else-if="card">
+              <span class="muted">{{ card.task.assigned_parent_name }} · {{ taskTypeLabel(card.task.task_type) }}</span>
+              <n-button
+                v-if="card.status === 'todo' && !card.reminded"
+                class="parent-task-control"
+                secondary
+                :loading="remindingTaskId === card.task.id"
+                :disabled="parentTaskActionBusy"
+                @click="remindParentTask(card)"
+              >提醒一下</n-button>
+              <span v-else class="pill" :class="card.status === 'done' ? 'teal' : 'amber'">
+                {{ card.status === 'done' ? '已确认' : card.status === 'pending' ? '待你确认' : '已提醒' }}
+              </span>
+            </template>
+          </div>
+        </article>
+      </div>
+    </section>
+
     <section v-if="home.goals.length" class="section">
       <div class="section-heading">
         <h2>正在靠近的目标</h2>
@@ -299,7 +408,10 @@ async function submit(note: string, photo: File | null) {
         >
           <div class="transaction-main">
             <strong>{{ transaction.note }}</strong>
-            <span>{{ formatDateTime(transaction.created_at) }}</span>
+            <span>
+              {{ formatDateTime(transaction.created_at) }} · {{ transactionKindLabel(transaction.kind) }}
+              <template v-if="transaction.contributor_name"> · 贡献者：{{ transaction.contributor_name }}</template>
+            </span>
           </div>
           <span
             class="transaction-delta"
@@ -331,6 +443,23 @@ async function submit(note: string, photo: File | null) {
 </template>
 
 <style scoped>
+.parent-task-entry .goal-top {
+  align-items: flex-start;
+}
+
+.parent-task-entry h3 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.parent-task-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
 .goal-description {
   margin: 0;
   color: var(--ink);
