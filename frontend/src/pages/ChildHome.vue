@@ -210,6 +210,7 @@ async function submit(note: string, photo: File | null) {
             </div>
             <span class="pill amber">{{ goal.progress_percent }}%</span>
           </div>
+          <p v-if="goal.description.trim()" class="goal-description">{{ goal.description.trim() }}</p>
           <div class="progress-track">
             <div
               class="progress-fill"
@@ -328,3 +329,14 @@ async function submit(note: string, photo: File | null) {
     />
   </main>
 </template>
+
+<style scoped>
+.goal-description {
+  margin: 0;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+</style>
