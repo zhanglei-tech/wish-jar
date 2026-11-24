@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import {
   NButton,
   NInput,
@@ -36,6 +36,7 @@ import { emojiChoices, taskTypeLabel } from '../utils'
 
 type Tab = 'members' | 'goals' | 'tasks' | 'rewards' | 'levels'
 type StageDraft = GoalStagePayload & { badge_image_url?: string | null }
+type GoalImageTarget = 'icon' | 'badge' | StageDraft
 
 const dialog = useDialog()
 const message = useMessage()
@@ -187,6 +188,7 @@ const goalOpen = ref(false)
 const editingGoal = ref<Goal | null>(null)
 const goalIconUrl = ref<string | null>(null)
 const goalBadgeUrl = ref<string | null>(null)
+const goalImageUploads = reactive(new Map<GoalImageTarget, symbol>())
 const goalForm = reactive({
   child_id: null as number | null,
   title: '',
@@ -232,56 +234,66 @@ function addStage() {
 }
 
 function removeStage(index: number) {
+  const stage = goalForm.stages[index]
+  if (stage) setGoalImage(stage, null, null)
   goalForm.stages.splice(index, 1)
 }
 
-async function pickGoalImage(kind: 'icon' | 'badge', event: Event) {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0] ?? null
-  if (!file) return
-  if (file.size > 2 * 1024 * 1024) {
-    message.warning('图片不能超过 2MB')
-    input.value = ''
-    return
-  }
-  try {
-    const result = await api.uploadIcon(file)
-    if (kind === 'icon') {
-      goalForm.icon_image_path = result.path
-      goalIconUrl.value = result.url
-    } else {
-      goalForm.badge_image_path = result.path
-      goalBadgeUrl.value = result.url
-    }
-    message.success('图片已上传')
-  } catch (err) {
-    message.error(err instanceof Error ? err.message : '图片上传失败')
-  } finally {
-    input.value = ''
+function releaseLocalGoalPreview(url: string | null | undefined) {
+  if (url?.startsWith('blob:')) URL.revokeObjectURL(url)
+}
+
+function setGoalImage(target: GoalImageTarget, path: string | null, url: string | null) {
+  goalImageUploads.delete(target)
+  if (target === 'icon') {
+    releaseLocalGoalPreview(goalIconUrl.value)
+    goalIconUrl.value = url
+    goalForm.icon_image_path = path
+  } else if (target === 'badge') {
+    releaseLocalGoalPreview(goalBadgeUrl.value)
+    goalBadgeUrl.value = url
+    goalForm.badge_image_path = path
+  } else {
+    releaseLocalGoalPreview(target.badge_image_url)
+    target.badge_image_url = url
+    target.badge_image_path = path
   }
 }
 
-async function pickStageImage(index: number, event: Event) {
+function releaseGoalPreviews() {
+  goalImageUploads.clear()
+  releaseLocalGoalPreview(goalIconUrl.value)
+  releaseLocalGoalPreview(goalBadgeUrl.value)
+  for (const stage of goalForm.stages) releaseLocalGoalPreview(stage.badge_image_url)
+}
+
+watch(goalOpen, (open) => {
+  if (!open) releaseGoalPreviews()
+}, { flush: 'sync' })
+onBeforeUnmount(releaseGoalPreviews)
+
+async function pickGoalImage(target: GoalImageTarget, event: Event) {
   const input = event.target as HTMLInputElement
-  const file = input.files?.[0] ?? null
+  const file = input.files?.[0]
+  input.value = ''
   if (!file) return
   if (file.size > 2 * 1024 * 1024) {
     message.warning('图片不能超过 2MB')
-    input.value = ''
     return
   }
+  const upload = Symbol()
+  goalImageUploads.set(target, upload)
   try {
-    const result = await api.uploadIcon(file)
-    const stage = goalForm.stages[index]
-    if (stage) {
-      stage.badge_image_path = result.path
-      stage.badge_image_url = result.url
-    }
-    message.success('阶段徽章图片已上传')
+    const { path } = await api.uploadIcon(file)
+    if (goalImageUploads.get(target) !== upload) return
+    // The server's media URL is readable only after the image is linked to a saved goal.
+    setGoalImage(target, path, URL.createObjectURL(file))
+    message.success(typeof target === 'string' ? '图片已上传' : '阶段徽章图片已上传')
   } catch (err) {
+    if (goalImageUploads.get(target) !== upload) return
     message.error(err instanceof Error ? err.message : '图片上传失败')
   } finally {
-    input.value = ''
+    if (goalImageUploads.get(target) === upload) goalImageUploads.delete(target)
   }
 }
 
@@ -344,6 +356,7 @@ function openEditGoal(goal: Goal) {
 }
 
 async function saveGoal() {
+  if (goalImageUploads.size > 0) return
   if (!goalForm.child_id || !goalForm.title.trim()) {
     message.warning('请选择孩子并填写目标名字')
     return
@@ -1388,7 +1401,7 @@ onMounted(load)
               v-if="goalIconUrl"
               type="button"
               class="link-button"
-              @click="goalIconUrl = null; goalForm.icon_image_path = null"
+              @click="setGoalImage('icon', null, null)"
             >
               移除
             </button>
@@ -1436,7 +1449,7 @@ onMounted(load)
                   v-if="goalBadgeUrl"
                   type="button"
                   class="link-button"
-                  @click="goalBadgeUrl = null; goalForm.badge_image_path = null"
+                  @click="setGoalImage('badge', null, null)"
                 >
                   移除
                 </button>
@@ -1494,14 +1507,14 @@ onMounted(load)
                   <input
                     type="file"
                     accept="image/jpeg,image/png,image/webp"
-                    @change="pickStageImage(index, $event)"
+                    @change="pickGoalImage(stage, $event)"
                   />
                 </label>
                 <button
                   v-if="stage.badge_image_url"
                   type="button"
                   class="link-button"
-                  @click="stage.badge_image_url = null; stage.badge_image_path = null"
+                  @click="setGoalImage(stage, null, null)"
                 >
                   移除
                 </button>
@@ -1522,7 +1535,12 @@ onMounted(load)
       <template #footer>
         <div class="modal-footer">
           <n-button @click="goalOpen = false">取消</n-button>
-          <n-button type="primary" @click="saveGoal">保存</n-button>
+          <n-button
+            type="primary"
+            :disabled="goalImageUploads.size > 0"
+            :loading="goalImageUploads.size > 0"
+            @click="saveGoal"
+          >保存</n-button>
         </div>
       </template>
     </n-modal>
