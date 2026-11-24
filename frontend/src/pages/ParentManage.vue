@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import {
   NButton,
   NInput,
@@ -189,6 +189,7 @@ const editingGoal = ref<Goal | null>(null)
 const goalIconUrl = ref<string | null>(null)
 const goalBadgeUrl = ref<string | null>(null)
 const goalImageUploads = reactive(new Map<GoalImageTarget, symbol>())
+const stageListEl = ref<HTMLElement | null>(null)
 const goalForm = reactive({
   child_id: null as number | null,
   title: '',
@@ -214,23 +215,53 @@ const goalTargetLabel = computed(() =>
   goalForm.progress_mode === 'points' ? '目标积分' : '目标次数',
 )
 
+// 沿用家长已经设定的节奏：有两段时沿用最近一次的间隔，只有一段时按这段本身递进，
+// 所以 1,000 → 2,000 之后是 3,000，而不是固定加目标值的四分之一。
+function suggestedStageThreshold(): number | null {
+  const target = Number(goalForm.target_value) || 0
+  if (target <= 1) return null
+  const stages = goalForm.stages
+  const span = Math.max(1, Math.floor(target / 10))
+  const lastIndex = stages.length - 1
+  if (lastIndex < 0) return Math.min(span, target - 1)
+  const last = Number(stages[lastIndex].threshold_value) || 0
+  if (last >= target - 1) return null
+  const previous = lastIndex > 0 ? Number(stages[lastIndex - 1].threshold_value) || 0 : 0
+  const step = lastIndex > 0 ? last - previous : last
+  const next = last + (step > 0 ? step : span)
+  // 按节奏会越过目标时，把剩下的空间对半分，而不是卡在目标值前 1 分。
+  return next < target ? next : Math.ceil((last + target) / 2)
+}
+
 function addStage() {
   if (goalForm.stages.length >= 10) {
     message.warning('最多设置 10 个阶段')
     return
   }
-  const previous = goalForm.stages[goalForm.stages.length - 1]
-  const target = Number(goalForm.target_value) || 100
-  const nextThreshold = previous
-    ? Math.min(target - 1, Number(previous.threshold_value) + Math.max(1, Math.floor(target / 4)))
-    : Math.max(1, Math.floor(target / 4))
+  const threshold = suggestedStageThreshold()
+  if (threshold === null) {
+    message.warning('阶段门槛需要小于目标值，请先调高目标值')
+    return
+  }
   goalForm.stages.push({
-    threshold_value: Math.max(1, nextThreshold),
+    threshold_value: threshold,
     badge_name: '',
     badge_emoji: '🏅',
     badge_image_path: null,
     badge_image_url: null,
   })
+  revealLastStage()
+}
+
+// Adding a stage used to force a scroll back up to the top button and down again.
+// Keep the newest stage in view and put the cursor in its threshold field instead.
+async function revealLastStage() {
+  await nextTick()
+  const rows = stageListEl.value?.querySelectorAll<HTMLElement>('.stage-row')
+  const row = rows?.[rows.length - 1]
+  if (!row) return
+  row.scrollIntoView({ block: 'nearest' })
+  row.querySelector<HTMLInputElement>('input[type="number"]')?.focus({ preventScroll: true })
 }
 
 function removeStage(index: number) {
@@ -1459,14 +1490,11 @@ onMounted(load)
         </div>
 
         <div class="field">
-          <div class="stage-head">
-            <label>阶段目标（可选，最多 10 个）</label>
-            <button type="button" class="link-button" @click="addStage">+ 添加阶段</button>
-          </div>
+          <label>阶段目标（可选，最多 10 个）</label>
           <p class="hint" style="margin: 0 0 8px">
             阶段门槛小于目标值，达成时自动授予阶段徽章。
           </p>
-          <div v-if="goalForm.stages.length" class="stage-list">
+          <div v-if="goalForm.stages.length" ref="stageListEl" class="stage-list">
             <div
               v-for="(stage, index) in goalForm.stages"
               :key="stage.id ?? `new-${index}`"
@@ -1521,6 +1549,9 @@ onMounted(load)
               </div>
             </div>
           </div>
+          <button type="button" class="stage-add-button" @click="addStage">
+            + 添加阶段{{ goalForm.stages.length ? `（已有 ${goalForm.stages.length}/10）` : '' }}
+          </button>
         </div>
 
         <div v-if="editingGoal" class="field">

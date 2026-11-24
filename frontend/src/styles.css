@@ -2105,6 +2105,23 @@ select.native-input option {
   background: rgba(255, 255, 255, 0.5);
 }
 
+.stage-add-button {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 10px;
+  border: 1px dashed var(--accent);
+  border-radius: 13px;
+  background: rgba(232, 106, 74, 0.06);
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.stage-add-button:hover {
+  background: rgba(232, 106, 74, 0.12);
+}
+
 .weekday-row {
   display: flex;
   flex-wrap: wrap;
